@@ -112,7 +112,7 @@ export async function analyzeFood(req: AnalyzeRequest): Promise<Verdict> {
       body: JSON.stringify({
         model: MODEL,
         thinking: thinkingOff(MODEL),
-        max_tokens: 700,
+        max_tokens: 2500,
         system: SYSTEM(today.toISOString().slice(0, 10)),
         messages: [{role: "user", content: [{type: "image", source: {type: "base64", media_type: type, data}}, {type: "text", text: "Read this label."}]}],
       }),

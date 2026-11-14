@@ -78,7 +78,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, thinking: thinkingOff(req.photoUrl ? MODEL : FAST_MODEL), max_tokens: 400, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
+      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, thinking: thinkingOff(req.photoUrl ? MODEL : FAST_MODEL), max_tokens: 1500, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
       signal: AbortSignal.timeout(15000),
     })
     if (!r.ok) throw new Error(`anthropic ${r.status}: ${await r.text()}`)

@@ -9,7 +9,8 @@ import {addEventDraft} from "./calendar"
 import {answerQuery, describeEvent, listEvents, todayOf} from "./calendar"
 import type {AnalyzeRequest, CalendarEvent, Verdict} from "../src/shared/types"
 
-const FAST_MODEL = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-5-5"
+/** Its own setting: the router forces a tool call, which Sonnet does not support, so it must stay on Haiku. */
+const FAST_MODEL = process.env.ANTHROPIC_MODEL_ROUTER ?? "claude-haiku-5-5"
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 const str = (description: string) => ({type: "string", description})
@@ -74,7 +75,7 @@ export async function routeRequest(req: AnalyzeRequest): Promise<Verdict> {
       body: JSON.stringify({
         model: FAST_MODEL,
         thinking: thinkingOff(FAST_MODEL),
-        max_tokens: 300,
+        max_tokens: 1000,
         system: SYSTEM(now),
         tools: TOOLS,
         tool_choice: {type: "any"},
