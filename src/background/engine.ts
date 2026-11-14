@@ -33,7 +33,7 @@ const SCAM_TRIGGERS: RegExp[] = [
   // Demands for money. Claude judges context (a birthday gift is fine).
   /\b(send|wire|transfer|mail|give|pay)\b.{0,15}\b(money|cash)\b/i,
   // Broad net: any single scam-flavoured word. This only decides WHEN to ask Claude; Claude decides if it is a scam.
-  /\b(irs|medicare|arrest(ed)?|warrant|bail|lawyer|jail|police|prize|lottery|sweepstakes|inheritance|western union|zelle|venmo|cash app|paypal|password|passcode|verification code|one time code|otp|pin number|bank account|routing number|virus|hacked|compromised|suspended|locked|refund|overdue|unpaid|penalty|urgent|immediately|act now|right now|grandson|granddaughter|grandchild|in trouble|accident|hospital|keep this secret|between us|don'?t hang up|stay on the line)\b/i,
+  /\b(irs|medicare|arrest(ed)?|warrant|bail|lawyer|jail|police|prize|lottery|sweepstakes|inheritance|western union|zelle|venmo|cash app|paypal|password|passcode|verification code|one time code|otp|pin number|bank account|routing number|virus|hacked|compromised|suspended|locked|refund|overdue|unpaid|penalty|urgent|act now|grandson|granddaughter|grandchild|in trouble|accident|hospital|keep this secret|between us|don'?t hang up|stay on the line)\b/i,
 ]
 const RANK = {info: 0, warn: 1, danger: 2} as const
 const SCAM_COMMAND = /is this a scam|check (this|that) (for a scam|scam)|scam check/i
@@ -48,7 +48,7 @@ const FOODISH = /\b(food|expired|allerg\w*|safe to eat|can i eat)\b/
 const AWAIT_MS = 8_000
 /** Calendar and clock questions work with no wake word: the person who needs them most may have forgotten it. */
 const CALENDAR_COMMAND =
-  /what (am i|should i be) (supposed to be )?doing|where (am i|should i be) supposed to be|where am i supposed to be|what'?s (next|on my (schedule|calendar|agenda))|what do i have (today|next|going on|coming up)|what'?s (my )?(schedule|plan)( for today)?|what am i doing (right )?now|what'?s happening (now|today)|what'?s on today/
+  /(am i|should i be) (supposed to be )?doing|supposed to be doing|where (am i|should i be) supposed to be|where am i supposed to be|what'?s (next|on my (schedule|calendar|agenda))|what do i have (today|next|going on|coming up)|what'?s (my )?(schedule|plan)( for today)?|what am i doing (right )?now|what'?s happening (now|today)|what'?s on today/
 const CLOCK_COMMAND = /what time is it|what'?s the time|what day is it|what'?s (the )?(date|day) (today|is it)|what is today/
 /** Looser schedule wording. No wake word needed, but these go through the router, which ignores non-requests. */
 const CALENDAR_LOOSE =
@@ -188,10 +188,10 @@ export class Engine {
     const command = SCAM_COMMAND.test(norm)
     const trigger = SCAM_TRIGGERS.find((re) => re.test(norm))
     if (!command && !trigger && !forced) return
-    void this.run(command ? "voice command" : `phrase ${trigger ?? "simulated"}`, command || forced)
+    void this.run(command ? "voice command" : `phrase ${trigger ?? "simulated"}`, command || forced, text)
   }
 
-  private async run(reason: string, explicit: boolean) {
+  private async run(reason: string, explicit: boolean, latest?: string) {
     const now = Date.now()
     if (this.busy) return
     if (now - this.lastRun < COOLDOWN_MS && !explicit) {
@@ -203,7 +203,11 @@ export class Engine {
     const t0 = Date.now()
     this.log(`TRIGGER ${reason}`)
     try {
-      const transcriptWindow = this.window.map((w) => w.text).join(" ")
+      const earlier = this.window.map((w) => w.text).join(" ")
+      // The window can hold minutes of unrelated speech. Point at the statement that triggered this check.
+      const transcriptWindow = latest ? `${earlier}
+
+Most recent statement (judge this one): "${latest}"` : earlier
 
       // Step 1: transcript-only verdict. No camera yet, so a pure phone scam never takes a photo.
       const first = await this.analyze({skill: "scam", transcriptWindow})

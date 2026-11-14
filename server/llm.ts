@@ -1,3 +1,4 @@
+import {thinkingOff} from "./anthropic"
 import {normalizeTranscript} from "../src/shared/text"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
@@ -7,7 +8,7 @@ const FAST_MODEL = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-5-5"
 
 const SCAM_SYSTEM = `You protect an older adult wearing camera glasses. You get a short transcript of what was just said near them and, sometimes, a photo of what they are looking at (screen, letter, ATM).
 Decide whether they are being scammed. Common red flags: gift cards, wire transfer, crypto/Bitcoin ATM, urgency, secrecy ("don't tell anyone"), a caller claiming to be IRS/Social Security/Medicare/bank/tech support, remote-access requests, fake virus pop-ups, a grandchild "in trouble".
-Red-flag words alone are not enough. Judge context: someone buying a gift card as a present, or family talking normally, is "safe". A scam needs pressure, secrecy, or a stranger or caller asking for money, codes or personal details. The transcript may include several minutes of unrelated speech; judge the most recent statements and who is speaking. Do not assume the wearer's relationship to anyone: say "a family member", never "grandchild".
+Red-flag words alone are not enough. Judge context: someone buying a gift card as a present, or family talking normally, is "safe". A scam needs pressure, secrecy, or a stranger or caller asking for money, codes or personal details. The transcript may include several minutes of unrelated speech; judge the most recent statements and who is speaking. If a "Most recent statement" is marked, base the verdict on it; earlier lines are only context. A harmless statement (a question about their own day, the time, the schedule) is "safe" even if earlier lines sounded like a scam. Do not assume the wearer's relationship to anyone: say "a family member", never "grandchild".
 Reply with ONLY a JSON object:
 {"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=12 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript","needsPhoto":true|false}
 needsPhoto is true only if something VISIBLE would add information (a screen or pop-up, a letter, an email or text message, a website, an ATM, a QR code, a gift card). It is false when the scam is only spoken, such as a phone call.
@@ -77,12 +78,13 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, max_tokens: 400, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
+      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, thinking: thinkingOff(req.photoUrl ? MODEL : FAST_MODEL), max_tokens: 400, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
       signal: AbortSignal.timeout(15000),
     })
     if (!r.ok) throw new Error(`anthropic ${r.status}: ${await r.text()}`)
     const body = (await r.json()) as {content: {type: string; text?: string}[]}
     const text = body.content.find((c) => c.type === "text")?.text ?? ""
+    if (!text) throw new Error(`no text in reply (stop_reason ${(body as {stop_reason?: string}).stop_reason})`)
     const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as {
       classification: string
       redFlags?: string[]

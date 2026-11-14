@@ -3,6 +3,7 @@
  * (small print, paperwork, devices). Private by default: nothing goes to the caregiver
  * feed unless the item looks like a scam.
  */
+import {thinkingOff} from "./anthropic"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
@@ -40,7 +41,7 @@ export async function analyzeAsk(req: AnalyzeRequest): Promise<Verdict> {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, max_tokens: 300, system: SYSTEM, messages: [{role: "user", content}]}),
+      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, thinking: thinkingOff(req.photoUrl ? MODEL : FAST_MODEL), max_tokens: 300, system: SYSTEM, messages: [{role: "user", content}]}),
       signal: AbortSignal.timeout(20000),
     })
     if (!r.ok) throw new Error(`anthropic ${r.status}: ${await r.text()}`)

@@ -4,6 +4,7 @@
  * The model only CHOOSES a tool and fills in its parameters. Schedule answers are still built by
  * plain code (calendar.ts), so it cannot invent a time or place.
  */
+import {thinkingOff} from "./anthropic"
 import {addEventDraft} from "./calendar"
 import {answerQuery, describeEvent, listEvents, todayOf} from "./calendar"
 import type {AnalyzeRequest, CalendarEvent, Verdict} from "../src/shared/types"
@@ -72,6 +73,7 @@ export async function routeRequest(req: AnalyzeRequest): Promise<Verdict> {
       headers: {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
       body: JSON.stringify({
         model: FAST_MODEL,
+        thinking: thinkingOff(FAST_MODEL),
         max_tokens: 300,
         system: SYSTEM(now),
         tools: TOOLS,
