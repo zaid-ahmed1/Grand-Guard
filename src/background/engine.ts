@@ -95,47 +95,41 @@ export class Engine {
     const t0 = Date.now()
     this.log(`TRIGGER ${reason}`)
     try {
-      // Announce the camera, but don't wait for speech to finish before capturing.
-      void this.session.speaker.speak("Camera on.", {processing: "preferLocal"}).catch(() => {})
-
       const transcriptWindow = this.window.map((w) => w.text).join(" ")
 
-      // Capture runs in parallel with the text check; vision never blocks the first whisper.
-      const photoP = this.session.camera
-        .takePhoto({size: "medium", compress: "medium", sound: false})
-        .then((p) => {
-          this.log(`photo ready at +${Date.now() - t0} ms`)
-          return p.photoUrl
-        })
-        .catch((e) => {
-          this.log(`photo failed, text-only: ${(e as {message?: string}).message}`)
-          return undefined
-        })
-
+      // Step 1: transcript-only verdict. No camera yet, so a pure phone scam never takes a photo.
       const first = await this.analyze({skill: "scam", transcriptWindow})
-      this.log(`text verdict ${first.severity} at +${Date.now() - t0} ms`)
+      this.log(`text verdict ${first.severity}, needsPhoto=${first.needsPhoto} at +${Date.now() - t0} ms`)
 
       // A silent "safe" result is fine for phrase triggers, but a direct question always gets an answer.
-      let spoken: Promise<void> = Promise.resolve()
-      if (first.severity !== "info" || explicit) {
-        spoken = this.whisper(first.whisper).then(() => this.log(`first whisper done at +${Date.now() - t0} ms`))
+      const speak = first.severity !== "info" || explicit
+      // Looking is only worth it for something visible, or when the wearer asked about what they see.
+      const wantPhoto = (first.needsPhoto === true && first.severity !== "info") || explicit
+
+      if (speak) {
+        // The camera announces itself in the same breath, before any capture.
+        const line = wantPhoto ? `${first.whisper} I'm taking a photo now.` : first.whisper
+        await this.whisper(line)
+        this.log(`first whisper done at +${Date.now() - t0} ms`)
       }
 
-      // Enrich with the photo; only speak again if it makes things worse.
-      const photoUrl = await photoP
-      if (photoUrl) {
+      // Step 2: optional photo, used to enrich the caregiver event; speak again only if it escalates.
+      if (wantPhoto) {
+        let photoUrl: string | undefined
         try {
+          photoUrl = (await this.session.camera.takePhoto({size: "medium", compress: "medium", sound: false})).photoUrl
+          this.log(`photo ready at +${Date.now() - t0} ms`)
+        } catch (e) {
+          this.log(`photo failed, text-only: ${(e as {message?: string}).message}`)
+        }
+        if (photoUrl) {
           const second = await this.analyze({skill: "scam", transcriptWindow, photoUrl, refines: first.eventId})
           this.log(`vision verdict ${second.severity} at +${Date.now() - t0} ms`)
-          if (RANK[second.severity] > RANK[first.severity]) {
-            await spoken
-            await this.whisper(second.whisper)
-          }
-        } catch (e) {
-          this.log(`vision check failed: ${(e as {message?: string}).message}`)
+          if (RANK[second.severity] > RANK[first.severity]) await this.whisper(second.whisper)
         }
+      } else {
+        this.log("no photo needed (audio-only scam)")
       }
-      await spoken
     } catch (e) {
       this.log(`engine error: ${(e as {message?: string}).message}`)
       await this.whisper("I couldn't check that. Please ask your family before doing anything.")

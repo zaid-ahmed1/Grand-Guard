@@ -7,7 +7,8 @@ const FAST_MODEL = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-5-5"
 const SCAM_SYSTEM = `You protect an older adult wearing camera glasses. You get a short transcript of what was just said near them and, sometimes, a photo of what they are looking at (screen, letter, ATM).
 Decide whether they are being scammed. Common red flags: gift cards, wire transfer, crypto/Bitcoin ATM, urgency, secrecy ("don't tell anyone"), a caller claiming to be IRS/Social Security/Medicare/bank/tech support, remote-access requests, fake virus pop-ups, a grandchild "in trouble".
 Reply with ONLY a JSON object:
-{"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=20 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript"}
+{"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=20 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript","needsPhoto":true|false}
+needsPhoto is true only if something VISIBLE would add information (a screen or pop-up, a letter, an email or text message, a website, an ATM, a QR code, a gift card). It is false when the scam is only spoken, such as a phone call.
 Stay calm, never alarming. Don't quote the transcript. If unclear, whisper something cautious like "I'm not sure. Please pause and call your daughter before doing anything."`
 
 function severityFor(classification: string, flags: number): Verdict["severity"] {
@@ -39,6 +40,7 @@ function heuristic(req: AnalyzeRequest): Verdict {
       : "Wearer asked for a scam check; nothing clear found.",
     evidence: flags.map((f) => ({kind: "red_flag", detail: f})),
     needsCaregiver: flags.length > 0,
+    needsPhoto: /screen|pop-?up|computer|laptop|letter|e-?mail|text message|website|atm|qr|look at/.test(t),
   }
 }
 
@@ -82,6 +84,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
       redFlags?: string[]
       whisper: string
       caregiverSummary?: string
+      needsPhoto?: boolean
     }
     const flags = j.redFlags ?? []
     const severity = severityFor(j.classification, flags.length)
@@ -92,6 +95,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
       caregiverSummary: j.caregiverSummary,
       evidence: flags.map((f) => ({kind: "red_flag", detail: f})),
       needsCaregiver: severity !== "info",
+      needsPhoto: j.needsPhoto === true,
     }
   } catch (e) {
     console.error("[llm] failed, falling back to heuristic:", (e as Error).message)

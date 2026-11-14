@@ -9,6 +9,8 @@ export interface Verdict {
   caregiverSummary?: string
   evidence?: {kind: string; detail: string}[]
   needsCaregiver: boolean
+  /** True when something visible (screen, letter, ATM) would add information. False for a pure phone/audio scam. */
+  needsPhoto?: boolean
   /** Caregiver feed event this verdict created or updated. */
   eventId?: string
 }
