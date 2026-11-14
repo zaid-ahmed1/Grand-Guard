@@ -53,6 +53,12 @@ const CLOCK_COMMAND = /what time is it|what'?s the time|what day is it|what'?s (
 /** Looser schedule wording. No wake word needed, but these go through the router, which ignores non-requests. */
 const CALENDAR_LOOSE =
   /\bwhat do i have\b|\bdo i have (anything|any|a|an)\b|\bam i (free|busy)\b|\bwhat'?s (on|planned|scheduled|happening|going on)\b|\bappointments?\b|\bmy (schedule|calendar)\b|\bremind me\b|\b(add|put) .{0,40}(to|on) my (calendar|schedule)\b/
+/**
+ * Food wording that needs no wake word. Deliberately specific (a question about "this", or date/allergen words) so
+ * ordinary talk about eating never takes a photo. The router still decides, and ignores non-requests.
+ */
+const FOOD_LOOSE =
+  /\b(still good|gone bad|gone off|expired|expiry|expiration|use by|best before|allergens?|ingredients?)\b|\b(can|should|could) i (eat|drink|have) (this|that|it)\b|\b(is|are) (this|that|it|these) (safe|ok|okay|fine|good) (to|for)\b|\bdoes (this|it) (have|contain)\b/
 const YES = /^(yes|yeah|yep|yup|sure|ok|okay|correct|please|do it|go ahead|that'?s right|right)\b/
 const NO = /^(no|nope|nah|cancel|never ?mind|don'?t|stop|wrong)\b/
 const CONFIRM_MS = 12_000
@@ -174,7 +180,7 @@ export class Engine {
     const direct = normalizeTranscript(text)
     if (CALENDAR_COMMAND.test(direct)) return void this.runCalendar()
     if (CLOCK_COMMAND.test(direct)) return void this.runClock()
-    if (CALENDAR_LOOSE.test(direct)) return void this.routeRequest(text, false)
+    if (CALENDAR_LOOSE.test(direct) || FOOD_LOOSE.test(direct)) return void this.routeRequest(text, false)
 
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
