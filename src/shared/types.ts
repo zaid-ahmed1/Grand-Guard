@@ -15,6 +15,12 @@ export interface Verdict {
   source?: "claude" | "fallback" | "code"
   /** Caregiver feed event this verdict created or updated. */
   eventId?: string
+  /** Router skill only: what the glasses should do next. */
+  action?: "speak" | "food" | "scam" | "ask" | "repeat" | "clock" | "confirm_add" | "none"
+  /** Router: a calendar event the wearer asked to add, awaiting their "yes". */
+  event?: Partial<CalendarEvent>
+  /** Router: the cleaned-up question for the general Ask skill. */
+  question?: string
 }
 
 export interface AnalyzeRequest {

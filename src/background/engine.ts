@@ -4,7 +4,7 @@
  * The transcript lives in memory only and is never persisted.
  */
 import type {MiniappSession} from "@mentra/miniapp/background"
-import type {AnalyzeRequest, Verdict} from "../shared/types"
+import type {AnalyzeRequest, CalendarEvent, Verdict} from "../shared/types"
 import type {Channels} from "../shared/channels"
 import {normalizeTranscript} from "../shared/text"
 import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
@@ -50,6 +50,12 @@ const AWAIT_MS = 8_000
 const CALENDAR_COMMAND =
   /what (am i|should i be) (supposed to be )?doing|where (am i|should i be) supposed to be|where am i supposed to be|what'?s (next|on my (schedule|calendar|agenda))|what do i have (today|next|going on|coming up)|what'?s (my )?(schedule|plan)( for today)?|what am i doing (right )?now|what'?s happening (now|today)|what'?s on today/
 const CLOCK_COMMAND = /what time is it|what'?s the time|what day is it|what'?s (the )?(date|day) (today|is it)|what is today/
+/** Looser schedule wording. No wake word needed, but these go through the router, which ignores non-requests. */
+const CALENDAR_LOOSE =
+  /\bwhat do i have\b|\bdo i have (anything|any|a|an)\b|\bam i (free|busy)\b|\bwhat'?s (on|planned|scheduled|happening|going on)\b|\bappointments?\b|\bmy (schedule|calendar)\b|\bremind me\b|\b(add|put) .{0,40}(to|on) my (calendar|schedule)\b/
+const YES = /^(yes|yeah|yep|yup|sure|ok|okay|correct|please|do it|go ahead|that'?s right|right)\b/
+const NO = /^(no|nope|nah|cancel|never ?mind|don'?t|stop|wrong)\b/
+const CONFIRM_MS = 12_000
 const REMIND_EVERY_MS = 60_000
 /** Hold a reminder back while anyone has spoken this recently. */
 const QUIET_BEFORE_REMINDER_MS = 2_000
@@ -65,6 +71,8 @@ export class Engine {
   private speaking = false
   private mutedUntil = 0
   private lastHeardAt = 0
+  /** A calendar event the wearer asked to add, waiting for their "yes". Nothing is saved without it. */
+  private pendingAdd: {event: Partial<CalendarEvent>; until: number} | null = null
   private lastRun = 0
   private backendUrl = DEFAULT_BACKEND
   private voice: VoiceConfig = DEFAULT_VOICE
@@ -128,6 +136,17 @@ export class Engine {
     const now = Date.now()
     if (!forced && (this.speaking || now < this.mutedUntil)) return
 
+    // Waiting for "yes" or "no" to a read-back? Answer it first. Anything else cancels the pending add.
+    if (this.pendingAdd) {
+      const reply = normalizeTranscript(text)
+      const pending = this.pendingAdd
+      this.pendingAdd = null
+      if (now < pending.until) {
+        if (YES.test(reply)) return void this.confirmAdd(pending.event)
+        if (NO.test(reply)) return void this.whisper("Okay. It was not added.")
+      }
+    }
+
     // Addressed to the assistant: either "<wake> <request>" or the request right after a bare "<wake>".
     // These utterances are commands, so they never enter the scam-detection window.
     let request: string | null = null
@@ -155,6 +174,7 @@ export class Engine {
     const direct = normalizeTranscript(text)
     if (CALENDAR_COMMAND.test(direct)) return void this.runCalendar()
     if (CLOCK_COMMAND.test(direct)) return void this.runClock()
+    if (CALENDAR_LOOSE.test(direct)) return void this.routeRequest(text, false)
 
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
@@ -239,7 +259,59 @@ export class Engine {
     if (FOOD_COMMAND.test(norm) || FOODISH.test(norm)) return this.runFood()
     if (SCAM_COMMAND.test(norm) || /\bscam/.test(norm)) return this.run("voice command", true)
     if (REPEAT.test(norm)) return this.repeat()
-    return this.runAsk(text, LOOK.test(norm))
+    // Unclear phrasing: let the router (one fast Claude call) pick a tool.
+    return this.routeRequest(text, true)
+  }
+
+  /**
+   * Ask Claude Haiku which tool fits the request, then run it. Clear phrases never get here (they match locally, no lag).
+   * `addressed` is true when the wearer used their wake word; unaddressed schedule talk is dropped silently if it is not a request.
+   * If the router is unreachable, an addressed request falls back to the general Ask skill.
+   */
+  private async routeRequest(text: string, addressed: boolean) {
+    if (this.busy) return
+    this.busy = true
+    const t0 = Date.now()
+    let v: Verdict | null = null
+    try {
+      v = await this.analyze({skill: "route", transcriptWindow: text, localNow: this.localNow()})
+    } catch (e) {
+      this.log(`router unavailable: ${(e as {message?: string}).message}`)
+    } finally {
+      this.busy = false
+    }
+    if (!v) return addressed ? this.runAsk(text, LOOK.test(normalizeTranscript(text))) : undefined
+    this.log(`route -> ${v.action} via ${v.source} at +${Date.now() - t0} ms`)
+    switch (v.action) {
+      case "speak":
+        this.log(`whisper: "${v.whisper}"`)
+        return this.whisper(v.whisper)
+      case "clock": return this.runClock()
+      case "food": return this.runFood()
+      case "scam": return this.run("voice command", true)
+      case "repeat": return this.repeat()
+      case "ask": return this.runAsk(v.question || text, v.needsPhoto ?? LOOK.test(normalizeTranscript(text)))
+      case "confirm_add":
+        if (!v.event) return
+        this.pendingAdd = {event: v.event, until: Date.now() + CONFIRM_MS}
+        this.log(`confirm add: "${v.whisper}"`)
+        return this.whisper(v.whisper)
+      default:
+        return addressed ? this.runAsk(text, LOOK.test(normalizeTranscript(text))) : undefined
+    }
+  }
+
+  /** The wearer said yes: save the event, marked as set by them so the caregiver sees who added it. */
+  private async confirmAdd(event: Partial<CalendarEvent>) {
+    try {
+      const r = await fetch(`${this.backendUrl}/calendar?by=wearer`, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(event)})
+      if (!r.ok) throw new Error(`calendar ${r.status}`)
+      this.log(`added to calendar: ${JSON.stringify(event)}`)
+      await this.whisper("Added to your schedule.")
+    } catch (e) {
+      this.log(`add failed: ${(e as {message?: string}).message}`)
+      await this.whisper("Unable to add that. Please ask a family member.")
+    }
   }
 
   /** The phone's local date and time, "YYYY-MM-DDTHH:MM". The server does no time-zone math. */

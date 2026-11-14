@@ -40,27 +40,33 @@ function save() {
 
 export const listEvents = () => events
 
-/** Returns an error message, or null if the event was added. */
-export function addEvent(raw: Partial<CalendarEvent>, setBy: CalendarEvent["setBy"]): string | CalendarEvent {
+/** Validate an event without saving it. `defaultDate` is used when there is no date and no repeat (the wearer said "at 3"). */
+export function addEventDraft(raw: Partial<CalendarEvent>, defaultDate?: string): string | Omit<CalendarEvent, "id" | "setBy"> {
   const title = String(raw.title ?? "").trim().slice(0, 80)
   if (!title) return "title is required"
   if (!/^\d{2}:\d{2}$/.test(raw.time ?? "")) return "time must be HH:MM"
   if (raw.endTime && !/^\d{2}:\d{2}$/.test(raw.endTime)) return "endTime must be HH:MM"
   if (raw.date && !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) return "date must be YYYY-MM-DD"
-  if (!raw.date && !raw.repeat) return "set a date or a repeat"
+  const date = raw.repeat ? undefined : raw.date || defaultDate
+  if (!date && !raw.repeat) return "set a date or a repeat"
   if (raw.repeat && !["daily", "weekly"].includes(raw.repeat)) return "repeat must be daily or weekly"
   if (raw.repeat === "weekly" && !(Number.isInteger(raw.weekday) && raw.weekday! >= 0 && raw.weekday! <= 6)) return "weekday must be 0-6"
-  const ev: CalendarEvent = {
-    id: crypto.randomUUID(),
+  return {
     title,
     time: raw.time!,
     endTime: raw.endTime || undefined,
-    date: raw.repeat ? undefined : raw.date,
+    date,
     repeat: raw.repeat,
     weekday: raw.repeat === "weekly" ? raw.weekday : undefined,
     place: raw.place?.trim().slice(0, 80) || undefined,
-    setBy,
   }
+}
+
+/** Returns an error message, or the saved event. */
+export function addEvent(raw: Partial<CalendarEvent>, setBy: CalendarEvent["setBy"], defaultDate?: string): string | CalendarEvent {
+  const draft = addEventDraft(raw, defaultDate)
+  if (typeof draft === "string") return draft
+  const ev: CalendarEvent = {id: crypto.randomUUID(), ...draft, setBy}
   events.push(ev)
   save()
   return ev
@@ -74,6 +80,20 @@ export function removeEvent(id: string): boolean {
 }
 
 const mins = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5))
+const end = (e: CalendarEvent) => (e.endTime ? mins(e.endTime) : mins(e.time) + DEFAULT_LENGTH_MIN)
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const weekdayOf = (d: string) => new Date(Date.UTC(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8, 10)))).getUTCDay()
+const joinList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`)
+
+/** "today", "tomorrow", "on Monday", or the date. */
+export function dayPhrase(date: string, today: string): string {
+  if (date === today) return "today"
+  const tomorrow = new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, Number(today.slice(8, 10)) + 1)).toISOString().slice(0, 10)
+  if (date === tomorrow) return "tomorrow"
+  return `on ${DAY_NAMES[weekdayOf(date)]}`
+}
+
+export const todayOf = (localNow: string) => parseNow(localNow)?.date
 
 /** "14:00" -> "2 PM", "14:30" -> "2:30 PM". */
 export function fmtTime(hhmm: string): string {
@@ -111,7 +131,6 @@ export function answerNow(list: CalendarEvent[], localNow: string): string | nul
   const t = parseNow(localNow)
   if (!t) return null
   const today = list.filter((e) => occursOn(e, t.date, t.weekday)).sort((a, b) => mins(a.time) - mins(b.time))
-  const end = (e: CalendarEvent) => (e.endTime ? mins(e.endTime) : mins(e.time) + DEFAULT_LENGTH_MIN)
   const current = today.filter((e) => mins(e.time) <= t.nowMin && t.nowMin < end(e))
 
   if (current.length === 1) {
@@ -150,4 +169,40 @@ export function calendarVerdict(query: "now" | "remind", localNow: string | unde
   if (query === "remind") return {...base, whisper: takeReminder(events, localNow)}
   const w = answerNow(events, localNow)
   return {...base, whisper: w ?? "Unable to read the calendar right now. Please ask a family member."}
+}
+
+/**
+ * "What do I have at 5 PM" / "what's on tomorrow". `date` is YYYY-MM-DD and `time` is HH:MM, both optional.
+ * With neither, this is the plain "now / next" answer. Plain code, so it never invents a time or place.
+ */
+export function answerQuery(list: CalendarEvent[], localNow: string, date?: string, time?: string): string | null {
+  const t = parseNow(localNow)
+  if (!t) return null
+  if (!date && !time) return answerNow(list, localNow)
+  const d = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : t.date
+  if (time && !/^\d{2}:\d{2}$/.test(time)) return null
+  const wd = weekdayOf(d)
+  const day = dayPhrase(d, t.date)
+  const events = list.filter((e) => occursOn(e, d, wd)).sort((a, b) => mins(a.time) - mins(b.time))
+
+  if (time) {
+    const at = mins(time)
+    const starting = events.filter((e) => mins(e.time) === at)
+    const hit = starting.length ? starting : events.filter((e) => mins(e.time) < at && at < end(e))
+    if (!hit.length) return `Nothing is planned at ${fmtTime(time)} ${day}.`
+    return `At ${fmtTime(time)} ${day}, you have ${joinList(hit.map((e) => `${e.title}${placeOf(e, false)}`))}.`
+  }
+
+  const remaining = d === t.date ? events.filter((e) => end(e) > t.nowMin) : events
+  if (!remaining.length) return d === t.date && events.length ? "Nothing else is planned today." : `Nothing is planned ${day}.`
+  const shown = remaining.slice(0, 4).map((e) => `${e.title} at ${fmtTime(e.time)}`)
+  const more = remaining.length - shown.length
+  const lead = day === "today" ? "Today" : day === "tomorrow" ? "Tomorrow" : day[0].toUpperCase() + day.slice(1)
+  return `${lead} you have ${joinList(more > 0 ? [...shown, `${more} more`] : shown)}.`
+}
+
+/** Plain-language description of an event the wearer is about to add, for the read-back. */
+export function describeEvent(e: Partial<CalendarEvent>, today: string): string {
+  const when = e.repeat === "daily" ? `every day at ${fmtTime(e.time!)}` : e.repeat === "weekly" ? `every ${DAY_NAMES[e.weekday ?? 0]} at ${fmtTime(e.time!)}` : `${dayPhrase(e.date ?? today, today)} at ${fmtTime(e.time!)}`
+  return `${e.title} ${when}${e.place ? `, ${/^(at|in|on|by|near)\s/i.test(e.place) ? e.place : `at ${e.place}`}` : ""}`
 }

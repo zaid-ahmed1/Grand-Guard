@@ -3,6 +3,7 @@ import {analyzeScam} from "./llm"
 import {analyzeFood} from "./food"
 import {analyzeAsk} from "./ask"
 import {addEvent, calendarVerdict, listEvents, removeEvent} from "./calendar"
+import {routeRequest} from "./router"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -65,22 +66,25 @@ Bun.serve({
     if (url.pathname === "/analyze" && req.method === "POST") {
       const t0 = Date.now()
       const body = (await req.json()) as AnalyzeRequest
-      if (!["scam", "food", "ask", "calendar"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
+      if (!["scam", "food", "ask", "calendar", "route"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
       const verdict =
         body.skill === "food" ? await analyzeFood(body)
         : body.skill === "ask" ? await analyzeAsk(body)
         : body.skill === "calendar" ? calendarVerdict(body.query ?? "now", body.localNow)
+        : body.skill === "route" ? await routeRequest(body)
         : await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
       if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
       // The calendar is polled every minute; only log it when it has something to say.
-      if (body.skill !== "calendar" || verdict.whisper)
+      if ((body.skill !== "calendar" || verdict.whisper) && body.skill !== "route")
         console.log(`[analyze] ${body.skill}${body.query ? `/${body.query}` : ""} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})${body.skill === "calendar" ? ` "${verdict.whisper}"` : ""}`)
+      if (body.skill === "route") console.log(`[route] "${body.transcriptWindow}" -> ${verdict.action}${verdict.whisper ? ` "${verdict.whisper}"` : ""} in ${Date.now() - t0} ms (${verdict.source})`)
       return json(verdict)
     }
     if (url.pathname === "/calendar" && req.method === "GET") return json(listEvents())
     if (url.pathname === "/calendar" && req.method === "POST") {
-      const r = addEvent((await req.json()) as never, "caregiver")
+      const by = url.searchParams.get("by") === "wearer" ? "wearer" : "caregiver"
+      const r = addEvent((await req.json()) as never, by)
       return typeof r === "string" ? json({error: r}, 400) : json(r)
     }
     if (url.pathname.startsWith("/calendar/") && req.method === "DELETE") {

@@ -143,7 +143,8 @@ Engine responsibilities (miniapp background layer):
    - **Direct phrases, no wake word:** "check this food", "is this a scam?", and the calendar and clock questions ("what am I supposed to be doing", "what's next", "what time is it"). These are unlikely in normal conversation, and the person who most needs the calendar answer is the one most likely to forget a wake word.
    - **Wearer-chosen wake word** (default "grand guard", at least 4 letters), matched fuzzily because on-device STT mishears names. "<wake> <request>" or a bare "<wake>" (the glasses say "Listening." and wait 8 s). Claude-free routing sends the request to food, scam, calendar, "say that again" or the general Ask skill; "cancel" or "never mind" stops it.
    - The glasses **ignore transcripts while they are speaking** (and for ~1 s after) so their own whispers are never treated as commands or added to the scam window.
-6. Always degrade gracefully: if photo or vision fails, whisper a safe fallback ("I couldn't read that, ask your caregiver") and log it.
+6. **Router (tool use) for unclear phrasing.** Clear phrases match locally with no lag. Anything else that is addressed to the assistant (wake word, or loose schedule words like "what do I have", "remind me") goes to **one Claude Haiku call with tools**: `check_calendar`, `add_calendar_event`, `tell_time`, `check_food`, `scam_check`, `repeat_last`, `look_and_answer`, `answer`, `not_for_me`. The model only picks the tool and fills parameters ("5pm" → 17:00, "tomorrow" → a date); schedule answers are still produced by code. Measured 0.5–1.4 s per route (14 test phrasings, local, no tunnel). It never runs on ordinary conversation, and if it is unreachable an addressed request falls back to the general Ask skill.
+7. Always degrade gracefully: if photo or vision fails, whisper a safe fallback ("I couldn't read that, ask your caregiver") and log it.
 
 ---
 
@@ -196,7 +197,8 @@ Engine responsibilities (miniapp background layer):
 - **Time zone:** the phone sends its local date and time; the server does no time-zone math.
 - **Ambient reminders:** a whisper ~10 minutes before an event, once per event. It is held back while someone is speaking, while the glasses are talking, or while waiting for a request.
 - **Failure path:** no network or server error → *"Unable to read the calendar right now. Please ask a family member."* Never guess.
-- **Extension (not scope):** wearer adds events by voice; Claude parses to a structured event, the glasses read it back for a "yes" before saving, and it is marked "added by you" so nobody's schedule is quietly rewritten. Google Calendar via a secret iCal link (recurrence rules are the hard part).
+- **Wearer adds events by voice (built):** "remind me to call Sam at 3" → the router (5.6) returns a structured event, the glasses read it back ("Add Call Sam today at 3 PM? Say yes or no."), and only a "yes" saves it, marked `setBy: "wearer"` ("set by them" on the caregiver page). Any other reply, or no reply in 12 s, drops it.
+- **Extension (not scope):** Google Calendar via a secret iCal link (recurrence rules are the hard part).
 
 ### 6.6 Fall check-in (stretch, only if everything else works)
 - `session.imu.onAccel`: detect free-fall dip → impact spike → stillness (`VERIFY` sample rate and background streaming; no gyro found). On suspected fall: TTS "Are you okay?", listen ~30 s; if no reply, take a photo and alert caregiver. Accept "I'm fine" to cancel (this is the false-positive control).
@@ -319,3 +321,4 @@ Face recognition; ambient or periodic photo-taking (the camera only runs when as
 - Built so far: local STT, photo and TTS (Phase 0 passed); Scam Shield with a loose keyword net and Claude deciding; Food Check (Claude reads the label verbatim, plain code judges allergens against `server/profile.ts` and the date); wake word + Ask Grand Guard; voice and speed controls.
 - Deviations from v0.1: the miniapp lives at the repo root (`src/`, `miniapp.json`), not `/miniapp`; `processing: "localOnly"` replaces the deprecated `forceLocal`; SDK is 3.4.0. Food Check is vision-only for now (barcode and Open Food Facts are not built). The server is exposed through a Cloudflare quick tunnel with no auth yet. Add a shared-secret header before any public demo.
 - Demo idea: add a 5-second calendar beat ("what am I supposed to be doing?" → "Right now, you have bingo at the bingo hall.") to show independence, not just protection.
+- **Router + wearer-added events (Sat Nov 14, later):** unclear phrasing goes through a Haiku tool-use router (see 5.6) instead of only regexes; "what do I have at 5pm", "am I free tomorrow", "remind me to call Sam at 3" now work, with a spoken read-back and a "yes" before anything is saved. Vague times ("afternoon") list the day instead of guessing a clock time.
