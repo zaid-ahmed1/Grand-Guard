@@ -99,7 +99,7 @@ export class Engine {
 
       // Step 1: transcript-only verdict. No camera yet, so a pure phone scam never takes a photo.
       const first = await this.analyze({skill: "scam", transcriptWindow})
-      this.log(`text verdict ${first.severity}, needsPhoto=${first.needsPhoto} at +${Date.now() - t0} ms`)
+      this.log(`text verdict ${first.severity} via ${first.source}, needsPhoto=${first.needsPhoto} at +${Date.now() - t0} ms`)
 
       // A silent "safe" result is fine for phrase triggers, but a direct question always gets an answer.
       const speak = first.severity !== "info" || explicit
@@ -109,6 +109,7 @@ export class Engine {
       if (speak) {
         // The camera announces itself in the same breath, before any capture.
         const line = wantPhoto ? `${first.whisper} I'm taking a photo now.` : first.whisper
+        this.log(`whisper: "${line}"`)
         await this.whisper(line)
         this.log(`first whisper done at +${Date.now() - t0} ms`)
       }
@@ -124,7 +125,7 @@ export class Engine {
         }
         if (photoUrl) {
           const second = await this.analyze({skill: "scam", transcriptWindow, photoUrl, refines: first.eventId})
-          this.log(`vision verdict ${second.severity} at +${Date.now() - t0} ms`)
+          this.log(`vision verdict ${second.severity} via ${second.source} at +${Date.now() - t0} ms`)
           if (RANK[second.severity] > RANK[first.severity]) await this.whisper(second.whisper)
         }
       } else {

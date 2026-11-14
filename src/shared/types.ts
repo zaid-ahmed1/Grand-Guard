@@ -11,6 +11,8 @@ export interface Verdict {
   needsCaregiver: boolean
   /** True when something visible (screen, letter, ATM) would add information. False for a pure phone/audio scam. */
   needsPhoto?: boolean
+  /** Which brain produced this verdict. "fallback" means the keyword heuristic, not Claude. */
+  source?: "claude" | "fallback"
   /** Caregiver feed event this verdict created or updated. */
   eventId?: string
 }

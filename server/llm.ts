@@ -40,6 +40,7 @@ function heuristic(req: AnalyzeRequest): Verdict {
       : "Wearer asked for a scam check; nothing clear found.",
     evidence: flags.map((f) => ({kind: "red_flag", detail: f})),
     needsCaregiver: flags.length > 0,
+    source: "fallback",
     needsPhoto: /screen|pop-?up|computer|laptop|letter|e-?mail|text message|website|atm|qr|look at/.test(t),
   }
 }
@@ -96,6 +97,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
       evidence: flags.map((f) => ({kind: "red_flag", detail: f})),
       needsCaregiver: severity !== "info",
       needsPhoto: j.needsPhoto === true,
+      source: "claude",
     }
   } catch (e) {
     console.error("[llm] failed, falling back to heuristic:", (e as Error).message)

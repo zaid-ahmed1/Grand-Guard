@@ -66,7 +66,7 @@ Bun.serve({
       const verdict = await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
       if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
-      console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms (photo=${!!body.photoUrl})`)
+      console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})`)
       return json(verdict)
     }
     if (url.pathname === "/events" && req.method === "GET") return json(events)
