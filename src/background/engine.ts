@@ -382,6 +382,32 @@ Most recent statement (judge this one): "${latest}"` : earlier
     await this.whisper(recent.join(" "))
   }
 
+  /**
+   * Take a photo of a label or page. Tries a sharp capture first, then the known-good medium preset, and retries once
+   * if the camera reports busy. Returns the URL, or undefined after logging the real reason for every failure.
+   */
+  private async capturePhoto(t0: number): Promise<string | undefined> {
+    const presets = [
+      {size: "high", compress: "medium"},
+      {size: "medium", compress: "medium"},
+    ] as const
+    for (const preset of presets) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await this.session.camera.takePhoto({...preset, sound: false, timeoutMs: 20_000})
+          this.log(`photo ready (${preset.size}/${preset.compress}) at +${Date.now() - t0} ms`)
+          return r.photoUrl
+        } catch (e) {
+          const msg = (e as {message?: string}).message ?? String(e)
+          this.log(`photo failed (${preset.size}/${preset.compress}, try ${attempt + 1}): ${msg}`)
+          if (!/busy/i.test(msg)) break // only a busy camera is worth retrying the same preset
+          await new Promise((res) => setTimeout(res, 1200))
+        }
+      }
+    }
+    return undefined
+  }
+
   /** General help (read this, explain this, how do I use this). Takes a photo only when the request is about something visible. */
   private async runAsk(question: string, look: boolean) {
     if (this.busy) return
@@ -391,14 +417,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
       let photoUrl: string | undefined
       if (look) {
         const announce = this.whisper("Taking a photo now.")
-        try {
-          photoUrl = (await this.session.camera.takePhoto({size: "high", compress: "none", sound: false})).photoUrl
-          this.log(`ask photo ready at +${Date.now() - t0} ms`)
-        } catch (e) {
-          this.log(`ask photo failed: ${(e as {message?: string}).message}`)
-        }
+        photoUrl = await this.capturePhoto(t0)
         await announce
-        if (!photoUrl) return void (await this.whisper("Unable to take a photo. Please hold it steady and try again."))
+        if (!photoUrl) return void (await this.whisper("Unable to take a photo. Please try again."))
       }
       const v = await this.analyze({skill: "ask", transcriptWindow: question, photoUrl})
       this.log(`ask verdict via ${v.source} at +${Date.now() - t0} ms`)
@@ -421,16 +442,10 @@ Most recent statement (judge this one): "${latest}"` : earlier
     try {
       // Announce the camera and capture at the same moment; speech keeps playing while the photo uploads.
       const announce = this.whisper("Checking this food. Taking a photo now.")
-      let photoUrl: string | undefined
-      try {
-        photoUrl = (await this.session.camera.takePhoto({size: "high", compress: "none", sound: false})).photoUrl
-        this.log(`food photo ready at +${Date.now() - t0} ms`)
-      } catch (e) {
-        this.log(`food photo failed: ${(e as {message?: string}).message}`)
-      }
+      const photoUrl = await this.capturePhoto(t0)
       await announce
       if (!photoUrl) {
-        await this.whisper("Unable to take a photo. Please hold the package steady and try again.")
+        await this.whisper("Unable to take a photo. Please try again.")
         return
       }
       const v = await this.analyze({skill: "food", transcriptWindow: "", photoUrl})
