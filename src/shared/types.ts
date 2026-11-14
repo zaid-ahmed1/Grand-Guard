@@ -15,6 +15,8 @@ export interface Verdict {
   source?: "claude" | "fallback" | "code"
   /** Caregiver feed event this verdict created or updated. */
   eventId?: string
+  /** Food Check: nothing useful could be read, so a closer or sharper photo is worth trying. */
+  unreadable?: boolean
   /** Router skill only: what the glasses should do next. */
   action?: "speak" | "food" | "scam" | "ask" | "repeat" | "clock" | "confirm_add" | "none"
   /** Router: a calendar event the wearer asked to add, awaiting their "yes". */

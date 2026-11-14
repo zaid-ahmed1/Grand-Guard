@@ -387,12 +387,12 @@ Most recent statement (judge this one): "${latest}"` : earlier
    * The glasses allow one photo job at a time, so this NEVER starts a second photo while one may be in flight:
    * on "busy / another job in progress" it waits and retries the same request; on any other failure it stops.
    */
-  private async capturePhoto(t0: number): Promise<{url?: string; why?: "busy" | "failed"}> {
+  private async capturePhoto(t0: number, size: "medium" | "high" = "medium"): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        const r = await this.session.camera.takePhoto({size: "medium", compress: "medium", sound: false, timeoutMs: 25_000})
-        this.log(`photo ready (medium/medium) at +${Date.now() - t0} ms`)
+        const r = await this.session.camera.takePhoto({size, compress: "medium", sound: false, timeoutMs: 25_000})
+        this.log(`photo ready (${size}/medium) at +${Date.now() - t0} ms`)
         return {url: r.photoUrl}
       } catch (e) {
         const msg = (e as {message?: string}).message ?? String(e)
@@ -444,19 +444,26 @@ Most recent statement (judge this one): "${latest}"` : earlier
     const t0 = Date.now()
     this.log("TRIGGER food check")
     try {
-      // Announce the camera and capture at the same moment; speech keeps playing while the photo uploads.
-      const announce = this.whisper("Checking this food. Taking a photo now.")
-      const photo = await this.capturePhoto(t0)
-      await announce
-      if (!photo.url) {
-        await this.whisper(this.photoFailLine(photo.why))
-        return
+      // Pass 1 uses the size that uploads reliably. If nothing is readable, ask the wearer to move closer and
+      // retake once at a sharper size. The camera announces itself both times.
+      let v: Verdict | undefined
+      for (let pass = 1; pass <= 2; pass++) {
+        const announce = this.whisper(pass === 1 ? "Checking this food. Taking a photo now." : "Taking a photo now.")
+        const photo = await this.capturePhoto(t0, pass === 1 ? "medium" : "high")
+        await announce
+        if (!photo.url) {
+          if (v) break // the sharper retry failed: fall back to the first verdict
+          await this.whisper(this.photoFailLine(photo.why))
+          return
+        }
+        v = await this.analyze({skill: "food", transcriptWindow: "", photoUrl: photo.url})
+        this.log(`food verdict ${v.severity} via ${v.source}${v.unreadable ? " (unreadable)" : ""} at +${Date.now() - t0} ms`)
+        if (!v.unreadable || pass === 2) break
+        await this.whisper("The label is hard to read. Hold it closer. Taking another photo in three seconds.")
+        await new Promise((res) => setTimeout(res, 3000))
       }
-      const photoUrl = photo.url
-      const v = await this.analyze({skill: "food", transcriptWindow: "", photoUrl})
-      this.log(`food verdict ${v.severity} via ${v.source} at +${Date.now() - t0} ms`)
-      this.log(`whisper: "${v.whisper}"`)
-      await this.whisper(v.whisper)
+      this.log(`whisper: "${v!.whisper}"`)
+      await this.whisper(v!.whisper)
     } catch (e) {
       this.log(`food error: ${(e as {message?: string}).message}`)
       await this.whisper("Unable to check this food. Please read the label yourself for allergens and the date.")

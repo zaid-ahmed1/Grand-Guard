@@ -67,6 +67,8 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   }
   const ingredientsUnread = !label.ingredientsText && !label.containsText
   if (ingredientsUnread && !hits.length) parts.push({sev: "warn", text: "The ingredients could not be read."})
+  // Nothing at all could be read and nothing is implied by the name: the photo is too far away or too small.
+  const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length
 
   let dateOk = false
   if (label.expiry.date) {
@@ -84,6 +86,10 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     parts.push({sev: "warn", text: "No date could be read."})
   }
 
+  if (unreadable) {
+    parts.length = 0
+    parts.push({sev: "warn", text: "The label is too small to read. Hold it about a hand's length from the glasses."})
+  }
   const rank = {info: 0, warn: 1, danger: 2} as const
   const severity: Severity = parts.reduce<Severity>((m, p) => (rank[p.sev] > rank[m] ? p.sev : m), "info")
   parts.sort((a, b) => rank[b.sev] - rank[a.sev])
@@ -101,6 +107,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     caregiverSummary: severity === "info" ? "Food check: no concerns found." : `Food check${label.productName ? ` (${label.productName})` : ""}: ${issues}.`,
     evidence,
     needsCaregiver: severity === "danger",
+    unreadable,
     source: "claude",
   }
 }
