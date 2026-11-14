@@ -6,7 +6,8 @@ type Photo = {url: string; mimeType: string; bytes: number; latencyMs: number; s
 
 export function App(): React.JSX.Element {
   const [logs, setLogs] = useState<string[]>([])
-  const [stt, setStt] = useState(false)
+  const [backend, setBackend] = useState("")
+  const [sim, setSim] = useState("He says I must buy gift cards right now and not tell anyone")
   const [lines, setLines] = useState<string[]>([])
   const [interim, setInterim] = useState("")
   const [photo, setPhoto] = useState<Photo | null>(null)
@@ -26,24 +27,21 @@ export function App(): React.JSX.Element {
         } else setInterim(t.text)
       }),
       mentra.on("p0:photoResult", setPhoto),
+      mentra.on("engine:backend", ({url}) => setBackend(url)),
     ]
     return () => offs.forEach((o) => o())
   }, [])
 
   return (
     <div className="app">
-      <h1>Phase 0 experiments</h1>
+      <h1>Guardian Glasses (debug)</h1>
 
-      <h2>A. Local transcription</h2>
-      <button
-        type="button"
-        onClick={() => {
-          mentra.send("p0:stt", {on: !stt})
-          setStt(!stt)
-        }}
-      >
-        {stt ? "Stop" : "Start"} (localOnly)
-      </button>
+      <h2>Engine</h2>
+      <input value={backend} placeholder="http://<laptop-LAN-IP>:8787" onChange={(e) => setBackend(e.target.value)} style={{width: "100%"}} />
+      <button type="button" onClick={() => mentra.send("engine:setBackend", {url: backend})}>Save backend URL</button>
+      <input value={sim} onChange={(e) => setSim(e.target.value)} style={{width: "100%"}} />
+      <button type="button" onClick={() => mentra.send("engine:simulate", {text: sim})}>Simulate trigger</button>
+      <h3>Live transcript</h3>
       {interim && <p><i>{interim}</i></p>}
       {lines.map((l, i) => <p key={i}>{l}</p>)}
 

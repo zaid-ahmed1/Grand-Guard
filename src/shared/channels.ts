@@ -6,11 +6,13 @@ export type PhotoCompress = "none" | "low" | "medium" | "high"
 export interface Channels {
   // WebView → background
   "ping": {at: number}
-  "p0:stt": {on: boolean}
+  "engine:setBackend": {url: string}
+  "engine:simulate": {text: string}
   "p0:photo": {size: PhotoSize; compress: PhotoCompress}
   "p0:speak": {text: string; processing: "preferCloud" | "preferLocal" | "localOnly"}
 
   // background → WebView
+  "engine:backend": {url: string}
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
   "p0:transcript": {text: string; isFinal: boolean; source?: string; latencyMs: number}

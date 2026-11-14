@@ -7,6 +7,7 @@
 import {registerMiniapp} from "@mentra/miniapp/background"
 import type {Channels} from "../shared/channels"
 import "../shared/channels"
+import {Engine} from "./engine"
 
 registerMiniapp<Channels>(async (session) => {
   const log = (msg: string) => {
@@ -16,38 +17,9 @@ registerMiniapp<Channels>(async (session) => {
 
   log(`capabilities: ${JSON.stringify(session.capabilities ?? {})}`)
 
-  // --- A. transcription (on-device only; replaces deprecated forceLocal) ---
-  let offStt: (() => void) | null = null
-  let offModel: (() => void) | null = null
-  let lastEventAt = Date.now()
-
-  session.ui.on("p0:stt", ({on}) => {
-    if (on && !offStt) {
-      lastEventAt = Date.now()
-      offModel = session.transcription.onModelStatus((s) =>
-        log(`stt model: ${s.state}${s.progress != null ? ` ${s.progress}%` : ""}${s.reason ? ` (${s.reason})` : ""}`),
-      )
-      offStt = session.transcription.on(
-        (d) => {
-          const now = Date.now()
-          session.ui.send("p0:transcript", {
-            text: d.text,
-            isFinal: d.isFinal,
-            source: d.source,
-            latencyMs: now - lastEventAt,
-          })
-          lastEventAt = now
-        },
-        {processing: "localOnly"},
-      )
-      log("stt started (localOnly)")
-    } else if (!on) {
-      offStt?.()
-      offModel?.()
-      offStt = offModel = null
-      log("stt stopped")
-    }
-  })
+  // --- A. transcription now lives in the engine (always-on, localOnly) ---
+  const engine = new Engine(session)
+  await engine.start()
 
   // --- B. photo ---
   session.ui.on("p0:photo", async ({size, compress}) => {
