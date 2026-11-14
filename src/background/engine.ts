@@ -36,6 +36,8 @@ const SCAM_TRIGGERS: RegExp[] = [
 ]
 const RANK = {info: 0, warn: 1, danger: 2} as const
 const SCAM_COMMAND = /is this a scam|check (this|that) (for a scam|scam)|scam check/i
+const FOOD_COMMAND =
+  /check (this|that) (food|leftovers?|meal|snack|package|can|box|label)|check (this|that) for (allergens?|expir)|can i eat (this|that)|(is|are) (this|that|these) (food )?(safe|ok|okay|good) to eat|is this (food )?expired|what'?s in this (food|package|box)/
 
 export class Engine {
   private window: {at: number; text: string}[] = []
@@ -89,6 +91,10 @@ export class Engine {
 
     // STT spells out acronyms ("i r s"), so match against a normalised copy.
     const norm = normalizeTranscript(text)
+    if (FOOD_COMMAND.test(norm)) {
+      void this.runFood()
+      return
+    }
     const command = SCAM_COMMAND.test(norm)
     const trigger = SCAM_TRIGGERS.find((re) => re.test(norm))
     if (!command && !trigger && !forced) return
@@ -148,6 +154,39 @@ export class Engine {
     } catch (e) {
       this.log(`engine error: ${(e as {message?: string}).message}`)
       await this.whisper("I was unable to verify this. Please check with a family member before acting.")
+    } finally {
+      this.busy = false
+    }
+  }
+
+  /** Food Check: a spoken command only. The camera is never used without the wearer asking, and it announces itself. */
+  private async runFood() {
+    if (this.busy) return
+    this.busy = true
+    const t0 = Date.now()
+    this.log("TRIGGER food check")
+    try {
+      // Announce the camera and capture at the same moment; speech keeps playing while the photo uploads.
+      const announce = this.whisper("Checking this food. Taking a photo now.")
+      let photoUrl: string | undefined
+      try {
+        photoUrl = (await this.session.camera.takePhoto({size: "high", compress: "none", sound: false})).photoUrl
+        this.log(`food photo ready at +${Date.now() - t0} ms`)
+      } catch (e) {
+        this.log(`food photo failed: ${(e as {message?: string}).message}`)
+      }
+      await announce
+      if (!photoUrl) {
+        await this.whisper("Unable to take a photo. Please hold the package steady and try again.")
+        return
+      }
+      const v = await this.analyze({skill: "food", transcriptWindow: "", photoUrl})
+      this.log(`food verdict ${v.severity} via ${v.source} at +${Date.now() - t0} ms`)
+      this.log(`whisper: "${v.whisper}"`)
+      await this.whisper(v.whisper)
+    } catch (e) {
+      this.log(`food error: ${(e as {message?: string}).message}`)
+      await this.whisper("Unable to check this food. Please read the label yourself for allergens and the date.")
     } finally {
       this.busy = false
     }
