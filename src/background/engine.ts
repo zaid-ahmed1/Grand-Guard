@@ -383,18 +383,19 @@ Most recent statement (judge this one): "${latest}"` : earlier
   }
 
   /**
-   * Take a photo of a label or page. Tries a sharp capture first, then the known-good medium preset, and retries once
-   * if the camera reports busy. Returns the URL, or undefined after logging the real reason for every failure.
+   * Take a photo of a label or page. Starts with the size known to upload reliably over the glasses link (a "high"
+   * uncompressed photo timed out), falls back to a smaller one, and retries once if the camera reports busy.
+   * Returns the URL, or undefined after logging the real reason for every failure.
    */
   private async capturePhoto(t0: number): Promise<string | undefined> {
     const presets = [
-      {size: "high", compress: "medium"},
-      {size: "medium", compress: "medium"},
+      {size: "medium", compress: "medium", timeoutMs: 15_000},
+      {size: "low", compress: "low", timeoutMs: 12_000},
     ] as const
     for (const preset of presets) {
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const r = await this.session.camera.takePhoto({...preset, sound: false, timeoutMs: 20_000})
+          const r = await this.session.camera.takePhoto({...preset, sound: false})
           this.log(`photo ready (${preset.size}/${preset.compress}) at +${Date.now() - t0} ms`)
           return r.photoUrl
         } catch (e) {
