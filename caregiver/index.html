@@ -95,9 +95,16 @@ document.getElementById('add').onsubmit = async ev => {
   const body = {title: f.get('title'), time: f.get('time'), place: f.get('place')};
   if (w === 'date') body.date = f.get('date'); else body.repeat = w;
   if (w === 'weekly') body.weekday = Number(f.get('weekday'));
-  const r = await fetch('/calendar', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
-  document.getElementById('err').textContent = r.ok ? '' : (await r.json()).error;
-  if (r.ok) { ev.target.reset(); document.getElementById('weekday').hidden = document.getElementById('date').hidden = true; loadCal(); }
+  const err = document.getElementById('err');
+  let r;
+  try { r = await fetch('/calendar', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)}); }
+  catch { err.textContent = 'Could not reach the server.'; return; }
+  if (!r.ok) {
+    err.textContent = r.status === 404 ? 'The server is out of date. Restart "bun run server".' : ((await r.json().catch(() => ({}))).error || 'Error ' + r.status);
+    return;
+  }
+  err.textContent = '';
+  { ev.target.reset(); document.getElementById('weekday').hidden = document.getElementById('date').hidden = true; loadCal(); }
 };
 loadCal();
 </script>
