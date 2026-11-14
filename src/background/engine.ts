@@ -5,7 +5,9 @@
  */
 import type {MiniappSession} from "@mentra/miniapp/background"
 import type {AnalyzeRequest, Verdict} from "../shared/types"
-import type {Channels, Processing} from "../shared/channels"
+import type {Channels} from "../shared/channels"
+import {normalizeTranscript} from "../shared/text"
+import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
 
 type Session = MiniappSession<Channels>
 
@@ -32,7 +34,7 @@ export class Engine {
   private busy = false
   private lastRun = 0
   private backendUrl = DEFAULT_BACKEND
-  private voice: {processing: Processing; speed: number} = {processing: "preferLocal", speed: 0.85}
+  private voice: VoiceConfig = DEFAULT_VOICE
 
   constructor(private session: Session) {}
 
@@ -52,11 +54,11 @@ export class Engine {
       this.log(`backend set to ${this.backendUrl}`)
     })
     const savedVoice = await this.session.storage.get("voice")
-    if (savedVoice) this.voice = JSON.parse(savedVoice)
+    if (savedVoice) this.voice = {...DEFAULT_VOICE, ...JSON.parse(savedVoice)}
     this.session.ui.on("engine:setVoice", async (v) => {
       this.voice = v
       await this.session.storage.set("voice", JSON.stringify(v))
-      this.log(`whisper voice: ${v.processing}, speed ${v.speed}`)
+      this.log(`whisper voice: ${JSON.stringify(v)}`)
     })
     this.session.ui.on("engine:simulate", ({text}) => this.ingest(text, true))
     this.session.ui.onOpen(() => {
@@ -77,8 +79,10 @@ export class Engine {
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
 
-    const command = SCAM_COMMAND.test(text)
-    const trigger = SCAM_TRIGGERS.find((re) => re.test(text))
+    // STT spells out acronyms ("i r s"), so match against a normalised copy.
+    const norm = normalizeTranscript(text)
+    const command = SCAM_COMMAND.test(norm)
+    const trigger = SCAM_TRIGGERS.find((re) => re.test(norm))
     if (!command && !trigger && !forced) return
     void this.run(command ? "voice command" : `phrase ${trigger ?? "simulated"}`, command || forced)
   }
@@ -108,7 +112,7 @@ export class Engine {
 
       if (speak) {
         // The camera announces itself in the same breath, before any capture.
-        const line = wantPhoto ? `${first.whisper} I'm taking a photo now.` : first.whisper
+        const line = wantPhoto ? `${first.whisper} Taking a photo now.` : first.whisper
         this.log(`whisper: "${line}"`)
         await this.whisper(line)
         this.log(`first whisper done at +${Date.now() - t0} ms`)
@@ -133,7 +137,7 @@ export class Engine {
       }
     } catch (e) {
       this.log(`engine error: ${(e as {message?: string}).message}`)
-      await this.whisper("I couldn't check that. Please ask your family before doing anything.")
+      await this.whisper("I was unable to verify this. Please check with a family member before acting.")
     } finally {
       this.busy = false
     }
@@ -153,9 +157,8 @@ export class Engine {
   private async whisper(text: string) {
     try {
       await this.session.speaker.speak(text, {
-        processing: this.voice.processing,
+        ...speakOptions(this.voice),
         stopOtherAudio: true,
-        voice_settings: {speed: this.voice.speed},
       })
     } catch (e) {
       this.log(`whisper failed: ${(e as {message?: string}).message}`)

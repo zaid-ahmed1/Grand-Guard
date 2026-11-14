@@ -1,3 +1,4 @@
+import {normalizeTranscript} from "../src/shared/text"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
@@ -9,7 +10,7 @@ Decide whether they are being scammed. Common red flags: gift cards, wire transf
 Reply with ONLY a JSON object:
 {"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=20 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript","needsPhoto":true|false}
 needsPhoto is true only if something VISIBLE would add information (a screen or pop-up, a letter, an email or text message, a website, an ATM, a QR code, a gift card). It is false when the scam is only spoken, such as a phone call.
-Stay calm, never alarming. Don't quote the transcript. If unclear, whisper something cautious like "I'm not sure. Please pause and call your daughter before doing anything."`
+Whisper style: professional, calm and matter-of-fact, like a bank's fraud desk. Short declarative sentences. No exclamation marks, no emotive words, no slang, no first person ("I"), and never claim to take actions such as calling or telling anyone. State what this appears to be, then the one thing to do. Good examples: "This appears to be a scam. Do not send money or share any codes. Please hang up." / "The IRS does not request payment by gift card. Do not continue this call." Don't quote the transcript. If unclear: "This may not be safe. Please pause and check with a family member before continuing."`
 
 function severityFor(classification: string, flags: number): Verdict["severity"] {
   if (classification === "scam" || flags >= 3) return "danger"
@@ -19,7 +20,7 @@ function severityFor(classification: string, flags: number): Verdict["severity"]
 
 /** Keyword fallback so the pipeline works with no API key or when the LLM call fails. */
 function heuristic(req: AnalyzeRequest): Verdict {
-  const t = req.transcriptWindow.toLowerCase()
+  const t = normalizeTranscript(req.transcriptWindow)
   const checks: [string, RegExp][] = [
     ["untraceable payment", /gift card|wire transfer|bitcoin|crypto|western union/],
     ["secrecy", /don'?t tell|keep this (between|secret)/],
@@ -33,8 +34,8 @@ function heuristic(req: AnalyzeRequest): Verdict {
     skill: req.skill,
     severity,
     whisper: flags.length
-      ? "This looks like a scam. Don't pay or give any codes. I'm telling your family."
-      : "I'm not sure. Please pause and check with your family first.",
+      ? "This appears to be a scam. Do not send money or share any codes. Please hang up."
+      : "This may not be safe. Please pause and check with a family member before continuing.",
     caregiverSummary: flags.length
       ? `Possible scam. Red flags: ${flags.join(", ")}.`
       : "Wearer asked for a scam check; nothing clear found.",

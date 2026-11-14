@@ -1,3 +1,4 @@
+import type {VoiceConfig} from "./voice"
 /** Typed channel registry between background JSContext and UI WebView. */
 
 export type Processing = "preferCloud" | "preferLocal" | "localOnly"
@@ -10,12 +11,12 @@ export interface Channels {
   "engine:setBackend": {url: string}
   "engine:simulate": {text: string}
   "p0:photo": {size: PhotoSize; compress: PhotoCompress}
-  "p0:speak": {text: string; processing: Processing; speed: number}
-  "engine:setVoice": {processing: Processing; speed: number}
+  "p0:speak": {text: string; voice: VoiceConfig}
+  "engine:setVoice": VoiceConfig
 
   // background → WebView
   "engine:backend": {url: string}
-  "engine:voice": {processing: Processing; speed: number}
+  "engine:voice": VoiceConfig
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
   "p0:transcript": {text: string; isFinal: boolean; source?: string; latencyMs: number}

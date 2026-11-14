@@ -9,6 +9,8 @@ export function App(): React.JSX.Element {
   const [backend, setBackend] = useState("")
   const [voiceMode, setVoiceMode] = useState<Processing>("preferLocal")
   const [speed, setSpeed] = useState(0.85)
+  const [voiceId, setVoiceId] = useState("")
+  const [calm, setCalm] = useState(false)
   const [sim, setSim] = useState("He says I must buy gift cards right now and not tell anyone")
   const [lines, setLines] = useState<string[]>([])
   const [interim, setInterim] = useState("")
@@ -33,6 +35,8 @@ export function App(): React.JSX.Element {
       mentra.on("engine:voice", (v) => {
         setVoiceMode(v.processing)
         setSpeed(v.speed)
+        setVoiceId(v.voiceId)
+        setCalm(v.calm)
       }),
     ]
     return () => offs.forEach((o) => o())
@@ -74,12 +78,16 @@ export function App(): React.JSX.Element {
       <select value={voiceMode} onChange={(e) => setVoiceMode(e.target.value as Processing)}>
         {["preferCloud", "preferLocal", "localOnly"].map((m) => <option key={m}>{m}</option>)}
       </select>
-      <button type="button" onClick={() => mentra.send("engine:setVoice", {processing: voiceMode, speed})}>
+      <label>
+        <input type="checkbox" checked={calm} onChange={(e) => setCalm(e.target.checked)} /> Calm delivery (less expressive)
+      </label>
+      <input value={voiceId} placeholder="voice id (blank = default)" onChange={(e) => setVoiceId(e.target.value)} style={{width: "100%"}} />
+      <button type="button" onClick={() => mentra.send("engine:setVoice", {processing: voiceMode, speed, voiceId, calm})}>
         Use for whispers
       </button>
       <input value={say} onChange={(e) => setSay(e.target.value)} style={{width: "100%"}} />
       {(["preferCloud", "preferLocal", "localOnly"] as const).map((processing) => (
-        <button key={processing} type="button" onClick={() => mentra.send("p0:speak", {text: say, processing, speed})}>
+        <button key={processing} type="button" onClick={() => mentra.send("p0:speak", {text: say, voice: {processing, speed, voiceId, calm}})}>
           Speak ({processing})
         </button>
       ))}

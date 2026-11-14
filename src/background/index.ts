@@ -8,6 +8,7 @@ import {registerMiniapp} from "@mentra/miniapp/background"
 import type {Channels} from "../shared/channels"
 import "../shared/channels"
 import {Engine} from "./engine"
+import {speakOptions} from "../shared/voice"
 
 registerMiniapp<Channels>(async (session) => {
   const log = (msg: string) => {
@@ -47,11 +48,11 @@ registerMiniapp<Channels>(async (session) => {
   session.speaker.onStateChange((e) =>
     log(`speaker state -> ${e.state}${e.errorCode ? ` ${e.errorCode}: ${e.errorMessage}` : ""}${e.durationMs != null ? ` (${e.durationMs} ms)` : ""}`),
   )
-  session.ui.on("p0:speak", async ({text, processing, speed}) => {
+  session.ui.on("p0:speak", async ({text, voice}) => {
     const t0 = Date.now()
-    log(`speak start (processing=${processing}, speed=${speed}, state=${session.speaker.state})`)
+    log(`speak start (${JSON.stringify(voice)}, state=${session.speaker.state})`)
     try {
-      const r = await session.speaker.speak(text, {processing, volume: 1.0, voice_settings: {speed}})
+      const r = await session.speaker.speak(text, {...speakOptions(voice), volume: 1.0})
       log(`speak resolved in ${Date.now() - t0} ms (completed=${r.completed})`)
     } catch (e) {
       const err = e as {code?: string; message?: string}
