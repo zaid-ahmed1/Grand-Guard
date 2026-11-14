@@ -1,4 +1,4 @@
-# SPEC.md — Guardian Glasses (working name; repo currently `grand-guard`)
+# SPEC.md — Grand Guard (formerly "Guardian Glasses")
 
 Elder-care assistant on **Mentra Live** camera glasses. Built at Immerse the Bay 2026 (Stanford, Nov 13–15).
 Status: **v0.1 starter spec — we will iterate.** Anything marked `VERIFY` is an unconfirmed assumption: test it before building on it.
@@ -32,7 +32,7 @@ Status: **v0.1 starter spec — we will iterate.** Anything marked `VERIFY` is a
 
 ## 2. Product in one paragraph
 
-Older adults face many small, high-stakes decisions that nobody can google in the moment. Guardian Glasses sees and hears what the wearer sees and hears, **whispers a short warning in their ear at the moment of risk**, and quietly sends an **event (not footage)** to a caregiver. One shared engine, several "skills":
+Older adults face many small, high-stakes decisions that nobody can google in the moment. Grand Guard sees and hears what the wearer sees and hears, **whispers a short warning in their ear at the moment of risk**, and quietly sends an **event (not footage)** to a caregiver. One shared engine, several "skills":
 
 | Skill | Trigger | What it does |
 |---|---|---|

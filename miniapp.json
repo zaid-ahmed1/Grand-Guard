@@ -2,7 +2,7 @@
   "$schema": "./node_modules/@mentra/miniapp-cli/schema/miniapp.schema.json",
   "packageName": "com.mentra.grand-guard",
   "version": "1.0.0",
-  "name": "Guardian Glasses",
+  "name": "Grand Guard",
   "description": "Elder-care assistant: scam shield and food check",
   "icon": "icon.png",
   "type": "standard",

@@ -1,4 +1,4 @@
-/** Guardian Glasses backend: /analyze, /events (+SSE), static caregiver page. */
+/** Grand Guard backend: /analyze, /events (+SSE), static caregiver page. */
 import {analyzeScam} from "./llm"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
