@@ -12,7 +12,7 @@ import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
 type Session = MiniappSession<Channels>
 
 const WINDOW_MS = 60_000
-const COOLDOWN_MS = 30_000
+const COOLDOWN_MS = 10_000
 // Inlined at build time by `define`; the bare JS engine has no `process` global, so guard it.
 const DEFAULT_BACKEND: string = typeof process !== "undefined" ? (process.env.MENTRA_PUBLIC_BACKEND_URL ?? "") : ""
 
@@ -27,7 +27,12 @@ const SCAM_TRIGGERS: RegExp[] = [
   /social security (number|digits)|\bssn\b|last (four|4) of (your|my) social/i,
   /credit card|debit card|card number|\bcvv\b|security code/i,
   /your (computer|device) (has|is|was).{0,20}(virus|infected|hacked)/i,
-  /\b(irs|social security|medicare)\b.{0,40}(owe|arrest|suspend|call|problem)/i,
+  /\b(irs|social security|medicare)\b.{0,40}(owe|arrest|suspend|call|problem|payment|refund|benefit|account|penalty|warrant|verify)/i,
+  /\bthis is (the )?(irs|internal revenue|medicare|social security)/i,
+  // Demands for money. Claude judges context (a birthday gift is fine).
+  /\b(send|wire|transfer|mail|give|pay)\b.{0,15}\b(money|cash)\b/i,
+  // Broad net: any single scam-flavoured word. This only decides WHEN to ask Claude; Claude decides if it is a scam.
+  /\b(irs|medicare|arrest(ed)?|warrant|bail|lawyer|jail|police|prize|lottery|sweepstakes|inheritance|western union|zelle|venmo|cash app|paypal|password|passcode|verification code|one time code|otp|pin number|bank account|routing number|virus|hacked|compromised|suspended|locked|refund|overdue|unpaid|penalty|urgent|immediately|act now|right now|grandson|granddaughter|grandchild|in trouble|accident|hospital|keep this secret|between us|don'?t hang up|stay on the line)\b/i,
 ]
 const RANK = {info: 0, warn: 1, danger: 2} as const
 const SCAM_COMMAND = /is this a scam|check (this|that) (for a scam|scam)|scam check/i
@@ -110,6 +115,8 @@ export class Engine {
 
       // A silent "safe" result is fine for phrase triggers, but a direct question always gets an answer.
       const speak = first.severity !== "info" || explicit
+      // A safe result must not block the next trigger, so a real scam right after a harmless line still gets checked.
+      if (!speak) this.lastRun = 0
       // Looking is only worth it for something visible, or when the wearer asked about what they see.
       const wantPhoto = (first.needsPhoto === true && first.severity !== "info") || explicit
 
@@ -136,7 +143,7 @@ export class Engine {
           if (RANK[second.severity] > RANK[first.severity]) await this.whisper(second.whisper)
         }
       } else {
-        this.log("no photo needed (audio-only scam)")
+        this.log(speak ? "no photo needed (audio-only scam)" : "judged safe, staying silent")
       }
     } catch (e) {
       this.log(`engine error: ${(e as {message?: string}).message}`)

@@ -7,8 +7,9 @@ const FAST_MODEL = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-5-5"
 
 const SCAM_SYSTEM = `You protect an older adult wearing camera glasses. You get a short transcript of what was just said near them and, sometimes, a photo of what they are looking at (screen, letter, ATM).
 Decide whether they are being scammed. Common red flags: gift cards, wire transfer, crypto/Bitcoin ATM, urgency, secrecy ("don't tell anyone"), a caller claiming to be IRS/Social Security/Medicare/bank/tech support, remote-access requests, fake virus pop-ups, a grandchild "in trouble".
+Red-flag words alone are not enough. Judge context: someone buying a gift card as a present, or family talking normally, is "safe". A scam needs pressure, secrecy, or a stranger or caller asking for money, codes or personal details. The transcript may include several minutes of unrelated speech; judge the most recent statements and who is speaking. Do not assume the wearer's relationship to anyone: say "a family member", never "grandchild".
 Reply with ONLY a JSON object:
-{"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=20 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript","needsPhoto":true|false}
+{"classification":"scam"|"likely_scam"|"unclear"|"safe","redFlags":["short phrase"],"whisper":"<=12 words, calm, plain language, tells them what to do now","caregiverSummary":"one short sentence, no verbatim transcript","needsPhoto":true|false}
 needsPhoto is true only if something VISIBLE would add information (a screen or pop-up, a letter, an email or text message, a website, an ATM, a QR code, a gift card). It is false when the scam is only spoken, such as a phone call.
 Whisper style: professional, calm and matter-of-fact, like a bank's fraud desk. Short declarative sentences. No exclamation marks, no emotive words, no slang, no first person ("I"), and never claim to take actions such as calling or telling anyone. State what this appears to be, then the one thing to do. Good examples: "This appears to be a scam. Do not send money or share any codes. Please hang up." / "The IRS does not request payment by gift card. Do not continue this call." Don't quote the transcript. If unclear: "This may not be safe. Please pause and check with a family member before continuing."`
 
@@ -22,7 +23,7 @@ function severityFor(classification: string, flags: number): Verdict["severity"]
 function heuristic(req: AnalyzeRequest): Verdict {
   const t = normalizeTranscript(req.transcriptWindow)
   const checks: [string, RegExp][] = [
-    ["untraceable payment", /gift card|wire transfer|bitcoin|crypto|western union/],
+    ["untraceable payment", /gift card|wire transfer|bitcoin|crypto|western union|(send|wire|transfer|mail|give|pay).{0,15}(money|cash)/],
     ["secrecy", /don'?t tell|keep this (between|secret)/],
     ["urgency", /right now|immediately|urgent|arrest|suspended/],
     ["impersonation", /\birs\b|social security|medicare|microsoft|your bank|tech support/],
