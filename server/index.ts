@@ -1,6 +1,7 @@
 /** Grand Guard backend: /analyze, /events (+SSE), static caregiver page. */
 import {analyzeScam} from "./llm"
 import {analyzeFood} from "./food"
+import {analyzeAsk} from "./ask"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -63,8 +64,8 @@ Bun.serve({
     if (url.pathname === "/analyze" && req.method === "POST") {
       const t0 = Date.now()
       const body = (await req.json()) as AnalyzeRequest
-      if (body.skill !== "scam" && body.skill !== "food") return json({error: `unknown skill ${body.skill}`}, 400)
-      const verdict = body.skill === "food" ? await analyzeFood(body) : await analyzeScam(body)
+      if (!["scam", "food", "ask"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
+      const verdict = body.skill === "food" ? await analyzeFood(body) : body.skill === "ask" ? await analyzeAsk(body) : await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
       if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
       console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})`)

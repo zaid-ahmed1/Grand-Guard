@@ -1,12 +1,14 @@
 import type React from "react"
 import {useEffect, useState} from "react"
 import type {PhotoCompress, PhotoSize, Processing} from "../shared/channels"
+import {DEFAULT_WAKE, wakeIssue} from "../shared/wake"
 
 type Photo = {url: string; mimeType: string; bytes: number; latencyMs: number; size: string; compress: string}
 
 export function App(): React.JSX.Element {
   const [logs, setLogs] = useState<string[]>([])
   const [backend, setBackend] = useState("")
+  const [wake, setWake] = useState(DEFAULT_WAKE)
   const [voiceMode, setVoiceMode] = useState<Processing>("preferLocal")
   const [speed, setSpeed] = useState(0.85)
   const [voiceId, setVoiceId] = useState("")
@@ -32,6 +34,7 @@ export function App(): React.JSX.Element {
       }),
       mentra.on("p0:photoResult", setPhoto),
       mentra.on("engine:backend", ({url}) => setBackend(url)),
+      mentra.on("engine:wake", ({phrase}) => setWake(phrase)),
       mentra.on("engine:voice", (v) => {
         setVoiceMode(v.processing)
         setSpeed(v.speed)
@@ -49,6 +52,10 @@ export function App(): React.JSX.Element {
       <h2>Engine</h2>
       <input value={backend} placeholder="http://<laptop-LAN-IP>:8787" onChange={(e) => setBackend(e.target.value)} style={{width: "100%"}} />
       <button type="button" onClick={() => mentra.send("engine:setBackend", {url: backend})}>Save backend URL</button>
+      <h3>Wake word (the wearer chooses)</h3>
+      <input value={wake} placeholder="e.g. Hey Walter" onChange={(e) => setWake(e.target.value)} style={{width: "100%"}} />
+      {wakeIssue(wake) && <p><b>{wakeIssue(wake)}</b></p>}
+      <button type="button" disabled={!!wakeIssue(wake)} onClick={() => mentra.send("engine:setWake", {phrase: wake})}>Save wake word</button>
       <input value={sim} onChange={(e) => setSim(e.target.value)} style={{width: "100%"}} />
       <button type="button" onClick={() => mentra.send("engine:simulate", {text: sim})}>Simulate trigger</button>
       <h3>Live transcript</h3>

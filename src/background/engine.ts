@@ -8,6 +8,7 @@ import type {AnalyzeRequest, Verdict} from "../shared/types"
 import type {Channels} from "../shared/channels"
 import {normalizeTranscript} from "../shared/text"
 import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
+import {DEFAULT_WAKE, findWake, wakeIssue} from "../shared/wake"
 
 type Session = MiniappSession<Channels>
 
@@ -39,9 +40,21 @@ const SCAM_COMMAND = /is this a scam|check (this|that) (for a scam|scam)|scam ch
 const FOOD_COMMAND =
   /check (this|that) (food|leftovers?|meal|snack|package|can|box|label)|check (this|that) for (allergens?|expir)|can i eat (this|that)|(is|are) (this|that|these) (food )?(safe|ok|okay|good) to eat|is this (food )?expired|what'?s in this (food|package|box)/
 
+const CANCEL = /\b(cancel|never ?mind|stop|forget it)\b/
+const REPEAT = /\b(say that again|repeat that|what did (he|she|they|you) say|come again|say again)\b/
+/** Wake-addressed questions that are about something the wearer is looking at. */
+const LOOK = /\b(this|that|these|those|read|look|says?|label|letter|bill|menu|sign|screen|remote|device|button)\b/
+const FOODISH = /\b(food|expired|allerg\w*|safe to eat|can i eat)\b/
+const AWAIT_MS = 8_000
+
 export class Engine {
   private window: {at: number; text: string}[] = []
   private busy = false
+  private wake = DEFAULT_WAKE
+  private awaitUntil = 0
+  /** Our own speech can be picked up by the mic; ignore transcripts while speaking and just after. */
+  private speaking = false
+  private mutedUntil = 0
   private lastRun = 0
   private backendUrl = DEFAULT_BACKEND
   private voice: VoiceConfig = DEFAULT_VOICE
@@ -70,8 +83,23 @@ export class Engine {
       await this.session.storage.set("voice", JSON.stringify(v))
       this.log(`whisper voice: ${JSON.stringify(v)}`)
     })
+    const savedWake = await this.session.storage.get("wake")
+    if (savedWake) this.wake = savedWake
+    this.log(`wake word: "${this.wake}"`)
+    this.session.ui.on("engine:setWake", async ({phrase}) => {
+      const p = phrase.trim()
+      const issue = wakeIssue(p)
+      if (issue) {
+        this.log(`wake word rejected: ${issue}`)
+        return
+      }
+      this.wake = p
+      await this.session.storage.set("wake", p)
+      this.log(`wake word set to "${p}"`)
+    })
     this.session.ui.on("engine:simulate", ({text}) => this.ingest(text, true))
     this.session.ui.onOpen(() => {
+      this.session.ui.send("engine:wake", {phrase: this.wake})
       this.session.ui.send("engine:backend", {url: this.backendUrl})
       this.session.ui.send("engine:voice", this.voice)
     })
@@ -86,6 +114,31 @@ export class Engine {
 
   private ingest(text: string, forced: boolean) {
     const now = Date.now()
+    if (!forced && (this.speaking || now < this.mutedUntil)) return
+
+    // Addressed to the assistant: either "<wake> <request>" or the request right after a bare "<wake>".
+    // These utterances are commands, so they never enter the scam-detection window.
+    let request: string | null = null
+    if (this.awaitUntil > now) {
+      this.awaitUntil = 0
+      request = text
+    } else {
+      const w = findWake(text, this.wake)
+      if (w) {
+        if (w.rest) request = w.rest
+        else {
+          this.awaitUntil = now + AWAIT_MS
+          this.log("wake word heard, listening")
+          void this.whisper("Listening.")
+          return
+        }
+      }
+    }
+    if (request !== null) {
+      void this.ask(request)
+      return
+    }
+
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
 
@@ -159,6 +212,56 @@ export class Engine {
     }
   }
 
+  /** Route a wake-addressed request to the right skill. The wearer speaks naturally; nothing to memorise. */
+  private async ask(text: string) {
+    const norm = normalizeTranscript(text)
+    this.log(`ASK "${norm}"`)
+    if (CANCEL.test(norm)) return this.log("cancelled")
+    if (FOOD_COMMAND.test(norm) || FOODISH.test(norm)) return this.runFood()
+    if (SCAM_COMMAND.test(norm) || /\bscam/.test(norm)) return this.run("voice command", true)
+    if (REPEAT.test(norm)) return this.repeat()
+    return this.runAsk(text, LOOK.test(norm))
+  }
+
+  /** "Say that again": replay the last few seconds from the local transcript, slowly. Nothing leaves the device. */
+  private async repeat() {
+    const now = Date.now()
+    const recent = this.window.filter((w) => now - w.at <= 20_000).slice(-2).map((w) => w.text)
+    if (!recent.length) return this.whisper("Nothing was heard just now.")
+    this.log("repeating recent speech")
+    await this.whisper(recent.join(" "))
+  }
+
+  /** General help (read this, explain this, how do I use this). Takes a photo only when the request is about something visible. */
+  private async runAsk(question: string, look: boolean) {
+    if (this.busy) return
+    this.busy = true
+    const t0 = Date.now()
+    try {
+      let photoUrl: string | undefined
+      if (look) {
+        const announce = this.whisper("Taking a photo now.")
+        try {
+          photoUrl = (await this.session.camera.takePhoto({size: "high", compress: "none", sound: false})).photoUrl
+          this.log(`ask photo ready at +${Date.now() - t0} ms`)
+        } catch (e) {
+          this.log(`ask photo failed: ${(e as {message?: string}).message}`)
+        }
+        await announce
+        if (!photoUrl) return void (await this.whisper("Unable to take a photo. Please hold it steady and try again."))
+      }
+      const v = await this.analyze({skill: "ask", transcriptWindow: question, photoUrl})
+      this.log(`ask verdict via ${v.source} at +${Date.now() - t0} ms`)
+      this.log(`whisper: "${v.whisper}"`)
+      await this.whisper(v.whisper)
+    } catch (e) {
+      this.log(`ask error: ${(e as {message?: string}).message}`)
+      await this.whisper("Unable to answer that right now. Please try again.")
+    } finally {
+      this.busy = false
+    }
+  }
+
   /** Food Check: a spoken command only. The camera is never used without the wearer asking, and it announces itself. */
   private async runFood() {
     if (this.busy) return
@@ -204,6 +307,7 @@ export class Engine {
   }
 
   private async whisper(text: string) {
+    this.speaking = true
     try {
       await this.session.speaker.speak(text, {
         ...speakOptions(this.voice),
@@ -211,6 +315,9 @@ export class Engine {
       })
     } catch (e) {
       this.log(`whisper failed: ${(e as {message?: string}).message}`)
+    } finally {
+      this.speaking = false
+      this.mutedUntil = Date.now() + 1200
     }
   }
 }

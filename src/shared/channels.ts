@@ -13,10 +13,12 @@ export interface Channels {
   "p0:photo": {size: PhotoSize; compress: PhotoCompress}
   "p0:speak": {text: string; voice: VoiceConfig}
   "engine:setVoice": VoiceConfig
+  "engine:setWake": {phrase: string}
 
   // background → WebView
   "engine:backend": {url: string}
   "engine:voice": VoiceConfig
+  "engine:wake": {phrase: string}
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
   "p0:transcript": {text: string; isFinal: boolean; source?: string; latencyMs: number}
