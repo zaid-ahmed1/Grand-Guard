@@ -1,0 +1,39 @@
+{
+  "$schema": "./node_modules/@mentra/miniapp-cli/schema/miniapp.schema.json",
+  "packageName": "com.mentra.grand-guard",
+  "version": "1.0.0",
+  "name": "Guardian Glasses",
+  "description": "Elder-care assistant: scam shield and food check",
+  "icon": "icon.png",
+  "type": "standard",
+  "sdkVersion": "3.4.0",
+  "minHostVersion": "1.42.0",
+  "entry": {
+    "background": "background/index.js",
+    "ui": "ui/index.html"
+  },
+  "permissions": [
+    {
+      "type": "MICROPHONE",
+      "description": "Listen for scam phrases and voice commands."
+    },
+    {
+      "type": "CAMERA",
+      "description": "Take a photo only when a check is triggered."
+    }
+  ],
+  "hardwareRequirements": [
+    {
+      "type": "CAMERA",
+      "level": "REQUIRED"
+    },
+    {
+      "type": "MICROPHONE",
+      "level": "REQUIRED"
+    },
+    {
+      "type": "SPEAKER",
+      "level": "OPTIONAL"
+    }
+  ]
+}
