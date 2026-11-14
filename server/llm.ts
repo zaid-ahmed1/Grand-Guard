@@ -1,4 +1,5 @@
 import {thinkingOff} from "./anthropic"
+import {rememberPhoto} from "./debug"
 import {normalizeTranscript} from "../src/shared/text"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
@@ -67,6 +68,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
   if (req.photoUrl) {
     try {
       const img = await fetchImage(req.photoUrl)
+      rememberPhoto("scam", img.type, img.data)
       content.push({type: "image", source: {type: "base64", media_type: img.type, data: img.data}})
     } catch (e) {
       console.warn("[llm] photo skipped:", (e as Error).message)

@@ -4,6 +4,7 @@
  * date decisions are deterministic and testable.
  */
 import {thinkingOff} from "./anthropic"
+import {rememberNote, rememberPhoto} from "./debug"
 import {mentions, PROFILE} from "./profile"
 import type {AnalyzeRequest, Severity, Verdict} from "../src/shared/types"
 
@@ -105,6 +106,7 @@ export async function analyzeFood(req: AnalyzeRequest): Promise<Verdict> {
     if (!img.ok) throw new Error(`photo download ${img.status}`)
     const type = img.headers.get("content-type")?.split(";")[0] ?? "image/jpeg"
     const data = Buffer.from(await img.arrayBuffer()).toString("base64")
+    rememberPhoto("food", type, data)
     const today = new Date()
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -123,7 +125,9 @@ export async function analyzeFood(req: AnalyzeRequest): Promise<Verdict> {
     const text = body.content.find((c) => c.type === "text")?.text ?? ""
     const label = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as LabelRead
     label.expiry ??= {text: null, date: null, kind: "unknown"}
-    return judge(label, today)
+    const verdict = judge(label, today)
+    rememberNote("food", {labelRead: label, verdict: {severity: verdict.severity, whisper: verdict.whisper}})
+    return verdict
   } catch (e) {
     console.error("[food] failed:", (e as Error).message)
     return FAIL

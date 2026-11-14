@@ -4,6 +4,7 @@ import {analyzeFood} from "./food"
 import {analyzeAsk} from "./ask"
 import {addEvent, calendarVerdict, listEvents, removeEvent} from "./calendar"
 import {routeRequest} from "./router"
+import {isLocalRequest, lastPhoto} from "./debug"
 import {ALLERGEN_OPTIONS, PROFILE, setAvoid} from "./profile"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
@@ -81,6 +82,14 @@ Bun.serve({
         console.log(`[analyze] ${body.skill}${body.query ? `/${body.query}` : ""} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})${body.skill === "calendar" ? ` "${verdict.whisper}"` : ""}`)
       if (body.skill === "route") console.log(`[route] "${body.transcriptWindow}" -> ${verdict.action}${verdict.whisper ? ` "${verdict.whisper}"` : ""} in ${Date.now() - t0} ms (${verdict.source})`)
       return json(verdict)
+    }
+    if (url.pathname.startsWith("/debug/")) {
+      // Photos are sensitive: only the laptop itself may see them, never the public tunnel.
+      if (!isLocalRequest(req)) return new Response("not found", {status: 404})
+      const l = lastPhoto()
+      if (url.pathname === "/debug/last") return json(l ? {at: l.at, skill: l.skill, note: l.note} : {})
+      if (url.pathname === "/debug/photo" && l) return new Response(Buffer.from(l.data, "base64"), {headers: {"content-type": l.type, "cache-control": "no-store"}})
+      return new Response("not found", {status: 404})
     }
     if (url.pathname === "/profile" && req.method === "GET") return json({avoid: PROFILE.avoid, options: ALLERGEN_OPTIONS()})
     if (url.pathname === "/profile" && req.method === "PUT") {

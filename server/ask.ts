@@ -4,6 +4,7 @@
  * feed unless the item looks like a scam.
  */
 import {thinkingOff} from "./anthropic"
+import {rememberNote, rememberPhoto} from "./debug"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
@@ -35,7 +36,9 @@ export async function analyzeAsk(req: AnalyzeRequest): Promise<Verdict> {
       const img = await fetch(req.photoUrl, {signal: AbortSignal.timeout(8000)})
       if (!img.ok) throw new Error(`photo download ${img.status}`)
       const type = img.headers.get("content-type")?.split(";")[0] ?? "image/jpeg"
-      content.push({type: "image", source: {type: "base64", media_type: type, data: Buffer.from(await img.arrayBuffer()).toString("base64")}})
+      const data = Buffer.from(await img.arrayBuffer()).toString("base64")
+      rememberPhoto("ask", type, data)
+      content.push({type: "image", source: {type: "base64", media_type: type, data}})
     }
     content.push({type: "text", text: `The wearer said: "${req.transcriptWindow}"`})
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -49,6 +52,7 @@ export async function analyzeAsk(req: AnalyzeRequest): Promise<Verdict> {
     const text = body.content.find((c) => c.type === "text")?.text ?? ""
     const j = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1)) as {whisper: string; scamSuspected?: boolean}
     const scam = j.scamSuspected === true
+    if (req.photoUrl) rememberNote("ask", {question: req.transcriptWindow, whisper: j.whisper})
     return {
       skill: "ask",
       severity: scam ? "warn" : "info",

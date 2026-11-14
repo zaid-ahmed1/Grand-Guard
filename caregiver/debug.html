@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grand Guard · What the AI saw</title>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#14171c}
+  header{padding:16px;background:#14171c;color:#fff}
+  main{max-width:900px;margin:0 auto;padding:12px;display:grid;gap:12px}
+  img{max-width:100%;border-radius:8px;background:#fff}
+  pre{background:#fff;border-radius:8px;padding:12px;overflow:auto;font-size:13px;white-space:pre-wrap}
+  .hint{font-size:13px;color:#666}
+</style>
+</head>
+<body>
+<header><b>What the AI saw</b> <span class="hint" id="meta" style="color:#bbb"></span></header>
+<main>
+  <p class="hint">Debug view, laptop only. The photo is held in memory, not saved, and never shown to the caregiver. Updates every 3 seconds.</p>
+  <img id="img" alt="" hidden>
+  <pre id="note" hidden></pre>
+  <p id="none" class="hint">No photo yet. Say "check this food" on the glasses.</p>
+</main>
+<script>
+async function tick() {
+  try {
+    const r = await fetch('/debug/last');
+    if (!r.ok) { document.getElementById('none').textContent = r.status === 404 ? 'Open this page on the laptop itself (http://localhost:8787/debug.html). It is blocked on the tunnel.' : 'Error ' + r.status; return; }
+    const j = await r.json();
+    if (!j.at) return;
+    document.getElementById('none').hidden = true;
+    document.getElementById('meta').textContent = j.skill + ' · ' + new Date(j.at).toLocaleTimeString();
+    const img = document.getElementById('img'); img.hidden = false;
+    const src = '/debug/photo?t=' + j.at; if (!img.src.endsWith(src)) img.src = src;
+    const n = document.getElementById('note'); n.hidden = !j.note; n.textContent = j.note ? JSON.stringify(j.note, null, 2) : '';
+  } catch {}
+}
+tick(); setInterval(tick, 3000);
+</script>
+</body>
+</html>
