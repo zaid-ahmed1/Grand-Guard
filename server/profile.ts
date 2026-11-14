@@ -43,10 +43,10 @@ export const ALLERGENS: Record<string, {terms: string[]; exclude?: string[]}> = 
     terms: ["tree nut", "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia", "brazil nut"],
   },
   milk: {
-    terms: ["milk", "whey", "casein", "caseinate", "lactose", "butter", "buttermilk", "cream", "cheese", "yogurt", "yoghurt", "ghee", "dairy"],
+    terms: ["milk", "whey", "casein", "caseinate", "lactose", "butter", "buttermilk", "cream", "cheese", "yogurt", "yoghurt", "ghee", "dairy", "ice cream", "gelato", "custard", "mozzarella", "cheddar", "parmesan", "ricotta", "kefir", "whipped cream", "sour cream"],
     exclude: ["peanut butter", "almond butter", "nut butter", "cocoa butter", "shea butter", "coconut milk", "almond milk", "soy milk", "oat milk", "rice milk", "coconut cream", "cream of tartar"],
   },
-  eggs: {terms: ["egg", "albumin", "mayonnaise"]},
+  eggs: {terms: ["egg", "albumin", "mayonnaise", "omelet", "omelette", "meringue"]},
   soy: {terms: ["soy", "soya", "soybean", "edamame", "tofu"]},
   wheat: {terms: ["wheat", "gluten", "semolina", "spelt"]},
   fish: {terms: ["fish", "salmon", "tuna", "cod", "anchovy", "anchovies"]},

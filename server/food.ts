@@ -13,6 +13,8 @@ const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
 export interface LabelRead {
   isFood: boolean
   productName: string | null
+  /** Verbatim words on the FRONT of the pack that say what the food is (variety, flavour, form), e.g. "Mozzarella string cheese". */
+  frontText?: string | null
   ingredientsText: string | null
   containsText: string | null
   mayContainText: string | null
@@ -21,8 +23,8 @@ export interface LabelRead {
 
 const SYSTEM = (today: string) => `You read food packaging for an older adult wearing camera glasses. Today is ${today}.
 Reply with ONLY a JSON object:
-{"isFood":true|false,"productName":string|null,"ingredientsText":string|null,"containsText":string|null,"mayContainText":string|null,"expiry":{"text":string|null,"date":"YYYY-MM-DD"|null,"kind":"use_by"|"best_by"|"expires"|"unknown"}}
-Rules: copy label text verbatim. ingredientsText is the ingredients list, containsText is the "Contains:" line, mayContainText is the "May contain / processed in a facility with" line. Use null for anything not visible or not legible. Never guess or fill in from what such a product usually contains.
+{"isFood":true|false,"productName":string|null,"frontText":string|null,"ingredientsText":string|null,"containsText":string|null,"mayContainText":string|null,"expiry":{"text":string|null,"date":"YYYY-MM-DD"|null,"kind":"use_by"|"best_by"|"expires"|"unknown"}}
+Rules: copy label text verbatim. frontText is the wording on the front of the pack that says what the food is, such as the variety, flavour or form ("Mozzarella string cheese", "Peanut butter cups"). Copy only words printed on the pack. ingredientsText is the ingredients list, containsText is the "Contains:" line, mayContainText is the "May contain / processed in a facility with" line. Use null for anything not visible or not legible. Never guess or fill in from what such a product usually contains.
 For the date: "use by"/"expires"/"exp" are use_by or expires, "best by"/"best before"/"BB" are best_by. If only month and year are shown, use the last day of that month. If the format is ambiguous (for example 03/04/25), set date to null but keep the text.
 isFood is false if the photo does not show a food or drink item.`
 
@@ -41,7 +43,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
 
   const ingredientText = [label.ingredientsText, label.containsText].filter(Boolean).join(" ")
   const hits = avoid.filter((a) => mentions(ingredientText, a))
-  const maybe = avoid.filter((a) => !hits.includes(a) && mentions(label.mayContainText, a))
+  const maybe = avoid.filter((a) => !hits.includes(a) && mentions(label.mayContainText, a) && !mentions([label.productName, label.frontText].filter(Boolean).join(" "), a))
   if (hits.length) {
     parts.push({sev: "danger", text: `This contains ${list(hits)}, which you avoid.`})
     hits.forEach((a) => evidence.push({kind: "allergen", detail: `contains ${a}`}))
@@ -49,6 +51,19 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   if (maybe.length) {
     parts.push({sev: "warn", text: `It may contain ${list(maybe)}.`})
     maybe.forEach((a) => evidence.push({kind: "allergen", detail: `may contain ${a}`}))
+  }
+  // The pack's own name can make an allergen obvious even when the ingredients cannot be read ("String Cheese" is dairy).
+  // Only printed words are matched, never what a brand usually contains.
+  const named = [label.productName, label.frontText].filter(Boolean).join(" ")
+  const implied = avoid.filter((a) => !hits.includes(a) && mentions(named, a))
+  if (implied.length) {
+    const name = label.productName || label.frontText!
+    // A free-from claim ("vegan", "dairy-free") makes the name unreliable, so ask for a label check instead of a flat no.
+    const claim = /vegan|dairy[- ]free|non[- ]dairy|plant[- ]based|egg[- ]free|nut[- ]free|peanut[- ]free/i.test(named)
+    parts.push(claim
+      ? {sev: "warn", text: `The package says ${name}, which can contain ${list(implied)}. It also makes a free-from claim, so check the label.`}
+      : {sev: "danger", text: `The package says ${name}. That contains ${list(implied)}, which you avoid.`})
+    implied.forEach((a) => evidence.push({kind: "allergen", detail: `implied by package name (${name}): ${a}`}))
   }
   const ingredientsUnread = !label.ingredientsText && !label.containsText
   if (ingredientsUnread && !hits.length) parts.push({sev: "warn", text: "The ingredients could not be read."})
