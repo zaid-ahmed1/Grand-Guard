@@ -9,7 +9,33 @@ const cors = {"access-control-allow-origin": "*", "access-control-allow-headers"
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), {status, headers: {"content-type": "application/json", ...cors}})
 
-function publish(v: Verdict) {
+const rank = {info: 0, warn: 1, danger: 2} as const
+
+function broadcast(ev: CaregiverEvent) {
+  for (const c of clients) {
+    try {
+      c.enqueue(`data: ${JSON.stringify(ev)}
+
+`)
+    } catch {
+      clients.delete(c)
+    }
+  }
+}
+
+/** Create a feed event, or update the one this verdict refines (same id, so clients replace it). */
+function publish(v: Verdict, refines?: string): string {
+  const existing = refines ? events.find((e) => e.id === refines) : undefined
+  if (existing) {
+    if (rank[v.severity] >= rank[existing.severity]) {
+      existing.severity = v.severity
+      existing.whisper = v.whisper
+    }
+    existing.summary = v.caregiverSummary ?? existing.summary
+    existing.evidence = v.evidence ?? existing.evidence
+    broadcast(existing)
+    return existing.id
+  }
   const ev: CaregiverEvent = {
     id: crypto.randomUUID(),
     at: Date.now(),
@@ -21,13 +47,8 @@ function publish(v: Verdict) {
   }
   events.unshift(ev)
   events.length = Math.min(events.length, 200)
-  for (const c of clients) {
-    try {
-      c.enqueue(`data: ${JSON.stringify(ev)}\n\n`)
-    } catch {
-      clients.delete(c)
-    }
-  }
+  broadcast(ev)
+  return ev.id
 }
 
 Bun.serve({
@@ -44,7 +65,7 @@ Bun.serve({
       if (body.skill !== "scam") return json({error: `unknown skill ${body.skill}`}, 400)
       const verdict = await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
-      if (verdict.needsCaregiver) publish(verdict)
+      if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
       console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms (photo=${!!body.photoUrl})`)
       return json(verdict)
     }

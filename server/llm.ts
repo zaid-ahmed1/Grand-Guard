@@ -1,6 +1,8 @@
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5"
+/** Text-only first pass is latency-critical, so it uses a faster model. */
+const FAST_MODEL = process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-5-5"
 
 const SCAM_SYSTEM = `You protect an older adult wearing camera glasses. You get a short transcript of what was just said near them and, sometimes, a photo of what they are looking at (screen, letter, ATM).
 Decide whether they are being scammed. Common red flags: gift cards, wire transfer, crypto/Bitcoin ATM, urgency, secrecy ("don't tell anyone"), a caller claiming to be IRS/Social Security/Medicare/bank/tech support, remote-access requests, fake virus pop-ups, a grandchild "in trouble".
@@ -69,7 +71,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-      body: JSON.stringify({model: MODEL, max_tokens: 400, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
+      body: JSON.stringify({model: req.photoUrl ? MODEL : FAST_MODEL, max_tokens: 400, system: SCAM_SYSTEM, messages: [{role: "user", content}]}),
       signal: AbortSignal.timeout(15000),
     })
     if (!r.ok) throw new Error(`anthropic ${r.status}: ${await r.text()}`)

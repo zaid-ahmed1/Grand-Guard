@@ -9,6 +9,8 @@ export interface Verdict {
   caregiverSummary?: string
   evidence?: {kind: string; detail: string}[]
   needsCaregiver: boolean
+  /** Caregiver feed event this verdict created or updated. */
+  eventId?: string
 }
 
 export interface AnalyzeRequest {
@@ -17,6 +19,8 @@ export interface AnalyzeRequest {
   transcriptWindow: string
   /** Signed photo URL; the server downloads it (phone never handles image bytes). */
   photoUrl?: string
+  /** Event id from the earlier text-only verdict; the photo result updates that event. */
+  refines?: string
 }
 
 export interface CaregiverEvent {
