@@ -1,12 +1,14 @@
 import type React from "react"
 import {useEffect, useState} from "react"
-import type {PhotoCompress, PhotoSize} from "../shared/channels"
+import type {PhotoCompress, PhotoSize, Processing} from "../shared/channels"
 
 type Photo = {url: string; mimeType: string; bytes: number; latencyMs: number; size: string; compress: string}
 
 export function App(): React.JSX.Element {
   const [logs, setLogs] = useState<string[]>([])
   const [backend, setBackend] = useState("")
+  const [voiceMode, setVoiceMode] = useState<Processing>("preferLocal")
+  const [speed, setSpeed] = useState(0.85)
   const [sim, setSim] = useState("He says I must buy gift cards right now and not tell anyone")
   const [lines, setLines] = useState<string[]>([])
   const [interim, setInterim] = useState("")
@@ -28,6 +30,10 @@ export function App(): React.JSX.Element {
       }),
       mentra.on("p0:photoResult", setPhoto),
       mentra.on("engine:backend", ({url}) => setBackend(url)),
+      mentra.on("engine:voice", (v) => {
+        setVoiceMode(v.processing)
+        setSpeed(v.speed)
+      }),
     ]
     return () => offs.forEach((o) => o())
   }, [])
@@ -61,9 +67,19 @@ export function App(): React.JSX.Element {
       )}
 
       <h2>D. TTS whisper</h2>
+      <label>
+        Speed {speed.toFixed(2)}{" "}
+        <input type="range" min="0.6" max="1.2" step="0.05" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
+      </label>
+      <select value={voiceMode} onChange={(e) => setVoiceMode(e.target.value as Processing)}>
+        {["preferCloud", "preferLocal", "localOnly"].map((m) => <option key={m}>{m}</option>)}
+      </select>
+      <button type="button" onClick={() => mentra.send("engine:setVoice", {processing: voiceMode, speed})}>
+        Use for whispers
+      </button>
       <input value={say} onChange={(e) => setSay(e.target.value)} style={{width: "100%"}} />
       {(["preferCloud", "preferLocal", "localOnly"] as const).map((processing) => (
-        <button key={processing} type="button" onClick={() => mentra.send("p0:speak", {text: say, processing})}>
+        <button key={processing} type="button" onClick={() => mentra.send("p0:speak", {text: say, processing, speed})}>
           Speak ({processing})
         </button>
       ))}

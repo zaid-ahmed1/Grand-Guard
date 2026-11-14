@@ -47,11 +47,11 @@ registerMiniapp<Channels>(async (session) => {
   session.speaker.onStateChange((e) =>
     log(`speaker state -> ${e.state}${e.errorCode ? ` ${e.errorCode}: ${e.errorMessage}` : ""}${e.durationMs != null ? ` (${e.durationMs} ms)` : ""}`),
   )
-  session.ui.on("p0:speak", async ({text, processing}) => {
+  session.ui.on("p0:speak", async ({text, processing, speed}) => {
     const t0 = Date.now()
-    log(`speak start (processing=${processing}, state=${session.speaker.state})`)
+    log(`speak start (processing=${processing}, speed=${speed}, state=${session.speaker.state})`)
     try {
-      const r = await session.speaker.speak(text, {processing, volume: 1.0})
+      const r = await session.speaker.speak(text, {processing, volume: 1.0, voice_settings: {speed}})
       log(`speak resolved in ${Date.now() - t0} ms (completed=${r.completed})`)
     } catch (e) {
       const err = e as {code?: string; message?: string}

@@ -5,7 +5,7 @@
  */
 import type {MiniappSession} from "@mentra/miniapp/background"
 import type {AnalyzeRequest, Verdict} from "../shared/types"
-import type {Channels} from "../shared/channels"
+import type {Channels, Processing} from "../shared/channels"
 
 type Session = MiniappSession<Channels>
 
@@ -32,6 +32,7 @@ export class Engine {
   private busy = false
   private lastRun = 0
   private backendUrl = DEFAULT_BACKEND
+  private voice: {processing: Processing; speed: number} = {processing: "preferLocal", speed: 0.85}
 
   constructor(private session: Session) {}
 
@@ -50,8 +51,18 @@ export class Engine {
       await this.session.storage.set("backendUrl", this.backendUrl)
       this.log(`backend set to ${this.backendUrl}`)
     })
+    const savedVoice = await this.session.storage.get("voice")
+    if (savedVoice) this.voice = JSON.parse(savedVoice)
+    this.session.ui.on("engine:setVoice", async (v) => {
+      this.voice = v
+      await this.session.storage.set("voice", JSON.stringify(v))
+      this.log(`whisper voice: ${v.processing}, speed ${v.speed}`)
+    })
     this.session.ui.on("engine:simulate", ({text}) => this.ingest(text, true))
-    this.session.ui.onOpen(() => this.session.ui.send("engine:backend", {url: this.backendUrl}))
+    this.session.ui.onOpen(() => {
+      this.session.ui.send("engine:backend", {url: this.backendUrl})
+      this.session.ui.send("engine:voice", this.voice)
+    })
 
     // Local-only STT: audio never leaves the phone, only text goes to the backend.
     this.session.transcription.on((d) => {
@@ -146,7 +157,11 @@ export class Engine {
 
   private async whisper(text: string) {
     try {
-      await this.session.speaker.speak(text, {processing: "preferLocal", stopOtherAudio: true})
+      await this.session.speaker.speak(text, {
+        processing: this.voice.processing,
+        stopOtherAudio: true,
+        voice_settings: {speed: this.voice.speed},
+      })
     } catch (e) {
       this.log(`whisper failed: ${(e as {message?: string}).message}`)
     }
