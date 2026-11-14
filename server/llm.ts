@@ -27,6 +27,7 @@ function heuristic(req: AnalyzeRequest): Verdict {
     ["urgency", /right now|immediately|urgent|arrest|suspended/],
     ["impersonation", /\birs\b|social security|medicare|microsoft|your bank|tech support/],
     ["remote access", /remote access|anydesk|teamviewer|virus/],
+    ["asks for sensitive details", /social security (number|digits)|\bssn\b|credit card|debit card|card number|\bcvv\b|security code/],
   ]
   const flags = checks.filter(([, re]) => re.test(t)).map(([name]) => name)
   const severity: Verdict["severity"] = flags.length >= 3 ? "danger" : flags.length >= 1 ? "warn" : "info"

@@ -23,6 +23,9 @@ const SCAM_TRIGGERS: RegExp[] = [
   /bitcoin|crypto(currency)? atm|crypto/i,
   /don'?t tell (anyone|anybody|your)/i,
   /remote access|anydesk|teamviewer/i,
+  // Requests for sensitive details. Claude decides if it is actually a scam.
+  /social security (number|digits)|\bssn\b|last (four|4) of (your|my) social/i,
+  /credit card|debit card|card number|\bcvv\b|security code/i,
   /your (computer|device) (has|is|was).{0,20}(virus|infected|hacked)/i,
   /\b(irs|social security|medicare)\b.{0,40}(owe|arrest|suspend|call|problem)/i,
 ]
