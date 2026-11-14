@@ -4,12 +4,13 @@ import {analyzeFood} from "./food"
 import {analyzeAsk} from "./ask"
 import {addEvent, calendarVerdict, listEvents, removeEvent} from "./calendar"
 import {routeRequest} from "./router"
+import {ALLERGEN_OPTIONS, PROFILE, setAvoid} from "./profile"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
 const PORT = Number(process.env.PORT ?? 8787)
 const events: CaregiverEvent[] = []
 const clients = new Set<ReadableStreamDefaultController<string>>()
-const cors = {"access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,DELETE,OPTIONS"}
+const cors = {"access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS"}
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), {status, headers: {"content-type": "application/json", ...cors}})
 
@@ -80,6 +81,12 @@ Bun.serve({
         console.log(`[analyze] ${body.skill}${body.query ? `/${body.query}` : ""} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})${body.skill === "calendar" ? ` "${verdict.whisper}"` : ""}`)
       if (body.skill === "route") console.log(`[route] "${body.transcriptWindow}" -> ${verdict.action}${verdict.whisper ? ` "${verdict.whisper}"` : ""} in ${Date.now() - t0} ms (${verdict.source})`)
       return json(verdict)
+    }
+    if (url.pathname === "/profile" && req.method === "GET") return json({avoid: PROFILE.avoid, options: ALLERGEN_OPTIONS()})
+    if (url.pathname === "/profile" && req.method === "PUT") {
+      const b = (await req.json()) as {avoid?: unknown}
+      if (!Array.isArray(b.avoid)) return json({error: "avoid must be a list"}, 400)
+      return json({avoid: setAvoid(b.avoid), options: ALLERGEN_OPTIONS()})
     }
     if (url.pathname === "/calendar" && req.method === "GET") return json(listEvents())
     if (url.pathname === "/calendar" && req.method === "POST") {

@@ -209,7 +209,7 @@ Engine responsibilities (miniapp background layer):
 
 Served by the backend (single static page + SSE). No native app.
 - **Feed:** time, skill, severity, whisper text, short summary. Photo thumbnail only for `danger` events and only if the wearer's setting allows it. Real-time via SSE.
-- **Settings:** wearer profile (name, allergens, diet flags, strictness), escalation contact (name + phone), what's shared (toggles). (Medication schedule only if the stretch skill ships.) Currently the allergen list is hard-coded server-side (`server/profile.ts`) until this UI exists.
+- **Settings:** wearer profile (name, allergens, diet flags, strictness), escalation contact (name + phone), what's shared (toggles). (Medication schedule only if the stretch skill ships.) The "Foods to avoid" list (peanuts, tree nuts, milk, eggs, soy, wheat, fish, shellfish, sesame; default peanuts, milk, shellfish) is editable on the caregiver page, saved server-side in `data/profile.json`, and applies to the next Food Check with no restart. Diet flags and "contains vs may contain" strictness are not built.
 - **Calendar editor:** add and delete events (title, time, date or repeat, place). Shows who set each item.
 - **Notifications:** on-screen alert for the demo; optional SMS (e.g., Twilio) if time permits (`VERIFY` credits/keys).
 - **Wearer transparency:** "What I shared" log the wearer can ask the glasses to read aloud ("what did you send my daughter?").

@@ -28,6 +28,10 @@
   .chip .t{font-weight:700}
   .chip .x{position:absolute;top:2px;right:2px;padding:0 6px;background:transparent;color:#999;border:0;font-size:16px;line-height:1.2}
   .none{color:#aaa;font-size:12px}
+  .allergens{background:#fff;border-radius:8px;padding:12px 14px}
+  .allergens .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin:8px 0}
+  .allergens label{display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid #ccd;border-radius:6px;cursor:pointer;text-transform:capitalize}
+  .allergens label.on{background:#fdecee;border-color:#d62839;font-weight:600}
   .legend{font-size:12px;color:#666;margin-top:6px}
   @media(max-width:760px){.week{grid-template-columns:1fr}.day{min-height:0}}
   form{background:#fff;border-radius:8px;padding:12px 14px;display:grid;gap:8px}
@@ -42,6 +46,12 @@
 <main>
 <h2>Alerts</h2>
 <div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
+<h2>Foods to avoid</h2>
+<div class="allergens">
+  <p class="hint" style="margin:0">Food Check warns the wearer when a label contains one of these, or may contain it. It applies to the next check.</p>
+  <div class="opts" id="opts"></div>
+  <button id="saveAvoid" type="button">Save</button> <span class="hint" id="avoidMsg"></span>
+</div>
 <h2>Schedule</h2>
 <p class="hint">The glasses answer "what am I supposed to be doing?" from this list, and remind 10 minutes before each item.</p>
 <div class="nav"><button id="prev" type="button">&lsaquo; Previous</button><b id="range"></b><button id="today" type="button">Today</button><button id="next" type="button">Next &rsaquo;</button></div>
@@ -145,6 +155,20 @@ document.getElementById('add').onsubmit = async ev => {
   { ev.target.reset(); document.getElementById('weekday').hidden = document.getElementById('date').hidden = true; loadCal(); }
 };
 loadCal();
+
+// ---- foods to avoid ----
+async function loadProfile() {
+  const p = await (await fetch('/profile')).json();
+  document.getElementById('opts').innerHTML = p.options.map(o => `<label class="${p.avoid.includes(o) ? 'on' : ''}"><input type="checkbox" value="${esc(o)}" ${p.avoid.includes(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('');
+}
+document.getElementById('opts').onchange = e => e.target.closest('label').classList.toggle('on', e.target.checked);
+document.getElementById('saveAvoid').onclick = async () => {
+  const msg = document.getElementById('avoidMsg');
+  const avoid = [...document.querySelectorAll('#opts input:checked')].map(i => i.value);
+  const r = await fetch('/profile', {method: 'PUT', headers: {'content-type': 'application/json'}, body: JSON.stringify({avoid})});
+  msg.textContent = r.ok ? 'Saved: ' + (avoid.join(', ') || 'nothing to avoid') : (r.status === 404 ? 'Server out of date. Restart "bun run server".' : 'Could not save.');
+};
+loadProfile().catch(() => { document.getElementById('avoidMsg').textContent = 'Server out of date. Restart "bun run server".'; });
 </script>
 </body>
 </html>
