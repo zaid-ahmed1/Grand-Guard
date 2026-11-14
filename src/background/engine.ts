@@ -52,7 +52,7 @@ const CALENDAR_COMMAND =
 const CLOCK_COMMAND = /what time is it|what'?s the time|what day is it|what'?s (the )?(date|day) (today|is it)|what is today/
 const REMIND_EVERY_MS = 60_000
 /** Hold a reminder back while anyone has spoken this recently. */
-const QUIET_BEFORE_REMINDER_MS = 8_000
+const QUIET_BEFORE_REMINDER_MS = 2_000
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 

@@ -73,7 +73,9 @@ Bun.serve({
         : await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
       if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
-      console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})`)
+      // The calendar is polled every minute; only log it when it has something to say.
+      if (body.skill !== "calendar" || verdict.whisper)
+        console.log(`[analyze] ${body.skill}${body.query ? `/${body.query}` : ""} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})${body.skill === "calendar" ? ` "${verdict.whisper}"` : ""}`)
       return json(verdict)
     }
     if (url.pathname === "/calendar" && req.method === "GET") return json(listEvents())
