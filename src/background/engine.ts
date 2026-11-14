@@ -46,6 +46,15 @@ const REPEAT = /\b(say that again|repeat that|what did (he|she|they|you) say|com
 const LOOK = /\b(this|that|these|those|read|look|says?|label|letter|bill|menu|sign|screen|remote|device|button)\b/
 const FOODISH = /\b(food|expired|allerg\w*|safe to eat|can i eat)\b/
 const AWAIT_MS = 8_000
+/** Calendar and clock questions work with no wake word: the person who needs them most may have forgotten it. */
+const CALENDAR_COMMAND =
+  /what (am i|should i be) (supposed to be )?doing|where (am i|should i be) supposed to be|where am i supposed to be|what'?s (next|on my (schedule|calendar|agenda))|what do i have (today|next|going on|coming up)|what'?s (my )?(schedule|plan)( for today)?|what am i doing (right )?now|what'?s happening (now|today)|what'?s on today/
+const CLOCK_COMMAND = /what time is it|what'?s the time|what day is it|what'?s (the )?(date|day) (today|is it)|what is today/
+const REMIND_EVERY_MS = 60_000
+/** Hold a reminder back while anyone has spoken this recently. */
+const QUIET_BEFORE_REMINDER_MS = 8_000
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
 export class Engine {
   private window: {at: number; text: string}[] = []
@@ -55,6 +64,7 @@ export class Engine {
   /** Our own speech can be picked up by the mic; ignore transcripts while speaking and just after. */
   private speaking = false
   private mutedUntil = 0
+  private lastHeardAt = 0
   private lastRun = 0
   private backendUrl = DEFAULT_BACKEND
   private voice: VoiceConfig = DEFAULT_VOICE
@@ -106,10 +116,12 @@ export class Engine {
 
     // Local-only STT: audio never leaves the phone, only text goes to the backend.
     this.session.transcription.on((d) => {
+      this.lastHeardAt = Date.now()
       this.session.ui.send("p0:transcript", {text: d.text, isFinal: d.isFinal, source: d.source, latencyMs: 0})
       if (d.isFinal) this.ingest(d.text, false)
     }, {processing: "localOnly"})
     this.log("engine listening (localOnly STT)")
+    setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
   }
 
   private ingest(text: string, forced: boolean) {
@@ -138,6 +150,11 @@ export class Engine {
       void this.ask(request)
       return
     }
+
+    // Calendar and clock questions: direct phrases, answered without any wake word.
+    const direct = normalizeTranscript(text)
+    if (CALENDAR_COMMAND.test(direct)) return void this.runCalendar()
+    if (CLOCK_COMMAND.test(direct)) return void this.runClock()
 
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
@@ -217,10 +234,61 @@ export class Engine {
     const norm = normalizeTranscript(text)
     this.log(`ASK "${norm}"`)
     if (CANCEL.test(norm)) return this.log("cancelled")
+    if (CALENDAR_COMMAND.test(norm)) return this.runCalendar()
+    if (CLOCK_COMMAND.test(norm)) return this.runClock()
     if (FOOD_COMMAND.test(norm) || FOODISH.test(norm)) return this.runFood()
     if (SCAM_COMMAND.test(norm) || /\bscam/.test(norm)) return this.run("voice command", true)
     if (REPEAT.test(norm)) return this.repeat()
     return this.runAsk(text, LOOK.test(norm))
+  }
+
+  /** The phone's local date and time, "YYYY-MM-DDTHH:MM". The server does no time-zone math. */
+  private localNow(d = new Date()) {
+    const p = (n: number) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+
+  /** "What am I supposed to be doing?" Answered by plain code on the server from the caregiver's schedule. */
+  private async runCalendar() {
+    if (this.busy) return
+    this.busy = true
+    try {
+      const v = await this.analyze({skill: "calendar", transcriptWindow: "", localNow: this.localNow(), query: "now"})
+      this.log(`calendar: "${v.whisper}"`)
+      await this.whisper(v.whisper)
+    } catch (e) {
+      this.log(`calendar error: ${(e as {message?: string}).message}`)
+      await this.whisper("Unable to read the calendar right now. Please ask a family member.")
+    } finally {
+      this.busy = false
+    }
+  }
+
+  /** Time and date come from the phone's clock, so this works with no network. */
+  private async runClock() {
+    if (this.busy) return
+    const d = new Date()
+    const h = d.getHours()
+    const m = d.getMinutes()
+    const time = `${h % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""} ${h < 12 ? "AM" : "PM"}`
+    const line = `It is ${time} on ${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}.`
+    this.log(`clock: "${line}"`)
+    await this.whisper(line)
+  }
+
+  /** Ambient: a reminder shortly before an event. Skipped while anyone is talking or the glasses are busy. */
+  private async checkReminders() {
+    const now = Date.now()
+    if (!this.backendUrl || this.busy || this.speaking || this.awaitUntil > now) return
+    if (now - this.lastHeardAt < QUIET_BEFORE_REMINDER_MS) return
+    try {
+      const v = await this.analyze({skill: "calendar", transcriptWindow: "", localNow: this.localNow(), query: "remind"})
+      if (!v.whisper) return
+      this.log(`reminder: "${v.whisper}"`)
+      await this.whisper(v.whisper)
+    } catch {
+      // Quiet by design: a failed background poll must never speak.
+    }
   }
 
   /** "Say that again": replay the last few seconds from the local transcript, slowly. Nothing leaves the device. */

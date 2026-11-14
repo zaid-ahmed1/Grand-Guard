@@ -2,12 +2,13 @@
 import {analyzeScam} from "./llm"
 import {analyzeFood} from "./food"
 import {analyzeAsk} from "./ask"
+import {addEvent, calendarVerdict, listEvents, removeEvent} from "./calendar"
 import type {AnalyzeRequest, CaregiverEvent, Verdict} from "../src/shared/types"
 
 const PORT = Number(process.env.PORT ?? 8787)
 const events: CaregiverEvent[] = []
 const clients = new Set<ReadableStreamDefaultController<string>>()
-const cors = {"access-control-allow-origin": "*", "access-control-allow-headers": "content-type"}
+const cors = {"access-control-allow-origin": "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,DELETE,OPTIONS"}
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), {status, headers: {"content-type": "application/json", ...cors}})
 
@@ -64,12 +65,24 @@ Bun.serve({
     if (url.pathname === "/analyze" && req.method === "POST") {
       const t0 = Date.now()
       const body = (await req.json()) as AnalyzeRequest
-      if (!["scam", "food", "ask"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
-      const verdict = body.skill === "food" ? await analyzeFood(body) : body.skill === "ask" ? await analyzeAsk(body) : await analyzeScam(body)
+      if (!["scam", "food", "ask", "calendar"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
+      const verdict =
+        body.skill === "food" ? await analyzeFood(body)
+        : body.skill === "ask" ? await analyzeAsk(body)
+        : body.skill === "calendar" ? calendarVerdict(body.query ?? "now", body.localNow)
+        : await analyzeScam(body)
       // Events, not footage: only the verdict goes to the feed (never transcript or photo).
       if (verdict.needsCaregiver) verdict.eventId = publish(verdict, body.refines)
       console.log(`[analyze] ${body.skill} -> ${verdict.severity} in ${Date.now() - t0} ms via ${verdict.source} (photo=${!!body.photoUrl})`)
       return json(verdict)
+    }
+    if (url.pathname === "/calendar" && req.method === "GET") return json(listEvents())
+    if (url.pathname === "/calendar" && req.method === "POST") {
+      const r = addEvent((await req.json()) as never, "caregiver")
+      return typeof r === "string" ? json({error: r}, 400) : json(r)
+    }
+    if (url.pathname.startsWith("/calendar/") && req.method === "DELETE") {
+      return removeEvent(decodeURIComponent(url.pathname.slice("/calendar/".length))) ? json({ok: true}) : json({error: "not found"}, 404)
     }
     if (url.pathname === "/events" && req.method === "GET") return json(events)
     if (url.pathname === "/events/stream") {

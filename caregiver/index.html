@@ -14,11 +14,40 @@
   .meta{font-size:12px;color:#666}.w{font-weight:600;margin:4px 0}
   .flag{display:inline-block;background:#eee;border-radius:10px;padding:2px 8px;font-size:12px;margin:2px 4px 0 0}
   .empty{color:#666;text-align:center;margin-top:40px}
+  h2{font-size:15px;margin:22px 0 4px}
+  .cal{background:#fff;border-radius:8px;padding:10px 14px;margin:8px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
+  form{background:#fff;border-radius:8px;padding:12px 14px;display:grid;gap:8px}
+  input,select,button{font:inherit;padding:8px;border:1px solid #ccd;border-radius:6px}
+  button{background:#14171c;color:#fff;cursor:pointer}
+  .del{background:#fff;color:#d62839;border-color:#d62839;padding:4px 10px}
+  .hint{font-size:12px;color:#666}
 </style>
 </head>
 <body>
 <header><b>Grand Guard</b><span id="st">connecting…</span></header>
-<main id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></main>
+<main>
+<h2>Alerts</h2>
+<div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
+<h2>Daily schedule</h2>
+<p class="hint">The glasses answer "what am I supposed to be doing?" from this list, and remind 10 minutes before each item.</p>
+<div id="cal"></div>
+<form id="add">
+  <input name="title" placeholder="What (e.g. Bingo)" required maxlength="80">
+  <input name="time" type="time" required>
+  <select name="when" id="when">
+    <option value="daily">Every day</option>
+    <option value="weekly">Every week</option>
+    <option value="date">One day only</option>
+  </select>
+  <select name="weekday" id="weekday" hidden>
+    <option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
+  </select>
+  <input name="date" id="date" type="date" hidden>
+  <input name="place" placeholder="Where (e.g. at the bingo hall, in the kitchen)" maxlength="80">
+  <button>Add to schedule</button>
+  <span class="hint" id="err"></span>
+</form>
+</main>
 <script>
 const feed = document.getElementById('feed'), st = document.getElementById('st');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -40,6 +69,37 @@ const es = new EventSource('/events/stream');
 es.onopen = () => st.textContent = 'live';
 es.onerror = () => st.textContent = 'reconnecting…';
 es.onmessage = m => add(JSON.parse(m.data));
+
+// ---- schedule ----
+const fmt = t => { const [h, m] = t.split(':').map(Number); return `${h % 12 || 12}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`; };
+const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const when = e => e.repeat === 'daily' ? 'every day' : e.repeat === 'weekly' ? 'every ' + days[e.weekday] : e.date;
+async function loadCal() {
+  const list = (await (await fetch('/calendar')).json()).sort((a, b) => a.time.localeCompare(b.time));
+  document.getElementById('cal').innerHTML = list.map(e => `<div class="cal"><div><b>${esc(fmt(e.time))}</b> ${esc(e.title)} <span class="hint">${esc(e.place || '')}</span>
+    <div class="hint">${esc(when(e))} · set by ${e.setBy === 'wearer' ? 'them' : 'family'}</div></div>
+    <button class="del" data-id="${esc(e.id)}">Remove</button></div>`).join('') || '<p class="empty">Nothing scheduled.</p>';
+}
+document.getElementById('cal').onclick = async ev => {
+  const id = ev.target.dataset?.id; if (!id) return;
+  await fetch('/calendar/' + encodeURIComponent(id), {method: 'DELETE'}); loadCal();
+};
+document.getElementById('when').onchange = e => {
+  document.getElementById('weekday').hidden = e.target.value !== 'weekly';
+  document.getElementById('date').hidden = e.target.value !== 'date';
+  document.getElementById('date').required = e.target.value === 'date';
+};
+document.getElementById('add').onsubmit = async ev => {
+  ev.preventDefault();
+  const f = new FormData(ev.target), w = f.get('when');
+  const body = {title: f.get('title'), time: f.get('time'), place: f.get('place')};
+  if (w === 'date') body.date = f.get('date'); else body.repeat = w;
+  if (w === 'weekly') body.weekday = Number(f.get('weekday'));
+  const r = await fetch('/calendar', {method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify(body)});
+  document.getElementById('err').textContent = r.ok ? '' : (await r.json()).error;
+  if (r.ok) { ev.target.reset(); document.getElementById('weekday').hidden = document.getElementById('date').hidden = true; loadCal(); }
+};
+loadCal();
 </script>
 </body>
 </html>

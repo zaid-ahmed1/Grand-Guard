@@ -1,7 +1,7 @@
 # SPEC.md — Grand Guard (formerly "Guardian Glasses")
 
 Elder-care assistant on **Mentra Live** camera glasses. Built at Immerse the Bay 2026 (Stanford, Nov 13–15).
-Status: **v0.1 starter spec — we will iterate.** Anything marked `VERIFY` is an unconfirmed assumption: test it before building on it.
+Status: **v0.2 (Nov 14): the theme is now senior independence, with two modes (ambient and manual) and a calendar. See §2, §6.4–6.5 and the change log in §14.** Anything marked `VERIFY` is an unconfirmed assumption: test it before building on it.
 
 ---
 
@@ -32,18 +32,26 @@ Status: **v0.1 starter spec — we will iterate.** Anything marked `VERIFY` is a
 
 ## 2. Product in one paragraph
 
-Older adults face many small, high-stakes decisions that nobody can google in the moment. Grand Guard sees and hears what the wearer sees and hears, **whispers a short warning in their ear at the moment of risk**, and quietly sends an **event (not footage)** to a caregiver. One shared engine, several "skills":
+**Theme: senior independence.** Older adults face many small, high-stakes moments that nobody can google, and many things they are too proud to ask for help with (small print, paperwork, a confusing device, what they are supposed to be doing right now). Grand Guard sees and hears what the wearer sees and hears and **whispers a short, calm answer in their ear**. Nobody else in the room knows it helped. Safety events (a scam, an allergen) go quietly to a caregiver as an **event, not footage**; everything else stays private to the wearer. One shared engine, several "skills", in two modes:
+
+**Ambient mode** (audio only, always listening, no camera, speaks only when something is wrong or due): Scam Shield, calendar reminders.
+**Manual mode** (the wearer asks; the camera is allowed and always announces itself): Food Check, Ask Grand Guard (read this, explain this, how do I use this, say that again), and calendar questions.
+
+The modes are defined by what they use, not by the skill's topic. **The camera is never used without the wearer asking** (no ambient photo-taking), which is why Food Check is manual.
 
 | Skill | Trigger | What it does |
 |---|---|---|
 | **Scam Shield** (HERO #1) | Scam-like phrases in live transcript, or voice command | Looks at the screen/letter + listens, whispers "this looks like a scam, don't pay", alerts caregiver |
 | **Food Check** ("Is this safe for me?") (HERO #2) | Voice: "check this food" / "check this leftover" | Packaged food: barcode/label → allergens vs. wearer's profile, expiry date, (stretch) recalls. Leftovers: asks how old it is, warns if past guidance |
+| **Ask Grand Guard** (manual) | Wearer's own wake word + a natural request ("read this", "what does this letter mean", "how do I use this remote", "say that again") | Photo when the request is about something visible; Claude answers in ≤ 35 words, plain language. Private by default (see 6.4) |
+| **Calendar** (manual query + ambient reminders) | No wake word: "what am I supposed to be doing", "what's next", "what time is it"; plus a spoken reminder before an event | Answers from a caregiver-maintained schedule with plain code, never an LLM guess (see 6.5) |
 | *(stretch, cut first)* Ask About This Pill | Voice: "check this bottle" | Reads the label and explains the directions in plain language; compares to the caregiver's schedule. No dose tracking claims (see 6.3) |
 | *(stretch, cut first)* Fall check-in | IMU impact spike | Asks "are you okay?", listens, photo + alert caregiver if no answer |
 
 **Scope decision (Sat 7:15 AM): we build Scam Shield and Food Check as the two hero skills and polish them. Everything else is a stretch and gets cut before either hero is compromised.**
+**Update (Sat Nov 14): Ask Grand Guard and the Calendar are added as the independence layer. They reuse the same voice, photo, Claude and whisper path, so each is small. Cut rule unchanged: they are cut before either hero is compromised. Voice-added calendar events are an extension, not scope.**
 
-**Users:** the *wearer* (older adult, voice-only interaction) and the *caregiver* (web feed + settings).
+**Users:** the *wearer* (older adult, voice-only interaction, chooses their own wake word) and the *caregiver* (web feed, settings and calendar).
 
 ---
 
@@ -131,7 +139,10 @@ Engine responsibilities (miniapp background layer):
 2. Evaluate cheap triggers locally (keywords/phrases, voice commands). Only call the backend on a trigger. A backend LLM classifier on the window is allowed as a second-stage check, rate-limited.
 3. On trigger: say "camera on" (TTS) → `takePhoto` (if skill needs it) → POST `{skill, transcriptWindow, photoUrl, profileVersion}` to backend → receive `Verdict` → whisper it → POST event to the feed.
 4. Debounce: per-skill cooldown (e.g., 30 s) so we don't spam whispers.
-5. Voice commands: "check this food", "check this leftover", "is this a scam?" (and, only if the stretch ships, "check this bottle"). (`VERIFY` whether a wake word exists; otherwise rely on transcription matching.)
+5. Voice commands. There is no platform wake word, so the engine matches the transcript. Two kinds:
+   - **Direct phrases, no wake word:** "check this food", "is this a scam?", and the calendar and clock questions ("what am I supposed to be doing", "what's next", "what time is it"). These are unlikely in normal conversation, and the person who most needs the calendar answer is the one most likely to forget a wake word.
+   - **Wearer-chosen wake word** (default "grand guard", at least 4 letters), matched fuzzily because on-device STT mishears names. "<wake> <request>" or a bare "<wake>" (the glasses say "Listening." and wait 8 s). Claude-free routing sends the request to food, scam, calendar, "say that again" or the general Ask skill; "cancel" or "never mind" stops it.
+   - The glasses **ignore transcripts while they are speaking** (and for ~1 s after) so their own whispers are never treated as commands or added to the scam window.
 6. Always degrade gracefully: if photo or vision fails, whisper a safe fallback ("I couldn't read that, ask your caregiver") and log it.
 
 ---
@@ -165,7 +176,29 @@ Engine responsibilities (miniapp background layer):
 - **Safety rules (non-negotiable):** never say "you haven't taken it" or "go ahead and take it" based on missing data; "no record" is not permission. No dosing advice, no diagnosing, no "it's safe." When unsure: "Check with your caregiver or pharmacist."
 - Framed as a label reader, not a medical device.
 
-### 6.4 Fall check-in (stretch, only if everything else works)
+### 6.4 Ask Grand Guard (manual, independence layer)
+- **Purpose:** the things people hesitate to ask a person about: small print, paperwork, doctor-speak, a device they cannot work, a sentence they missed.
+- **Trigger:** wearer's wake word + natural speech. Claude is not used for routing: keywords pick food / scam / calendar / "say that again" / general. General requests that mention something visible ("this", "read", "letter", "menu", "remote") take a high-resolution photo (announced first).
+- **Answer:** Claude (Sonnet with a photo, Haiku without), ≤ 35 words, plain, respectful, never mentions age or ability. Reads the important parts (who, amount, date, what is asked), gives one step at a time for devices, says what to adjust if it cannot read the image, explains health text without diagnosing and points to the doctor or pharmacist.
+- **"Say that again":** replays the last ~20 s from the local transcript. Nothing leaves the device.
+- **Privacy (principle 8):** private by default. Nothing goes to the caregiver, unless the item looks like a scam (then a `warn` safety event).
+- **Limits (state honestly):** single-turn (no "ok, what next?" follow-ups); whether a photo is taken is decided by keywords.
+
+### 6.5 Calendar (manual query + ambient reminders)
+- **Data:** events set by the caregiver on the caregiver page (title, time, optional date or daily/weekly repeat, place) and, as a later extension, by the wearer speaking ("remind me to call Sam at 3"). Each event records `setBy`. Stored on the server; the wearer's glasses only ever receive the answer.
+- **Wearer questions (no wake word):** "what am I supposed to be doing", "where am I supposed to be", "what's next", "what's on my schedule", "what do I have today". "What time is it" / "what day is it" are answered on the phone from its clock.
+- **Answers are built by plain code from the schedule and the phone's clock. Never by an LLM.** It must not invent a time or place. Calm and exact, no exclamation marks:
+  - now: *"Right now, you have Bingo at the bingo hall. It started at 2 PM. Added by your family."*
+  - soon: *"Bingo starts in 10 minutes, at the bingo hall."*
+  - nothing now: *"Nothing is planned right now. Next is dinner at 5 PM."*
+  - nothing left: *"Nothing else is planned today."*
+  - overlap: name both.
+- **Time zone:** the phone sends its local date and time; the server does no time-zone math.
+- **Ambient reminders:** a whisper ~10 minutes before an event, once per event. It is held back while someone is speaking, while the glasses are talking, or while waiting for a request.
+- **Failure path:** no network or server error → *"Unable to read the calendar right now. Please ask a family member."* Never guess.
+- **Extension (not scope):** wearer adds events by voice; Claude parses to a structured event, the glasses read it back for a "yes" before saving, and it is marked "added by you" so nobody's schedule is quietly rewritten. Google Calendar via a secret iCal link (recurrence rules are the hard part).
+
+### 6.6 Fall check-in (stretch, only if everything else works)
 - `session.imu.onAccel`: detect free-fall dip → impact spike → stillness (`VERIFY` sample rate and background streaming; no gyro found). On suspected fall: TTS "Are you okay?", listen ~30 s; if no reply, take a photo and alert caregiver. Accept "I'm fine" to cancel (this is the false-positive control).
 
 ---
@@ -174,7 +207,8 @@ Engine responsibilities (miniapp background layer):
 
 Served by the backend (single static page + SSE). No native app.
 - **Feed:** time, skill, severity, whisper text, short summary. Photo thumbnail only for `danger` events and only if the wearer's setting allows it. Real-time via SSE.
-- **Settings:** wearer profile (name, allergens, diet flags, strictness), escalation contact (name + phone), what's shared (toggles). (Medication schedule only if the stretch skill ships.)
+- **Settings:** wearer profile (name, allergens, diet flags, strictness), escalation contact (name + phone), what's shared (toggles). (Medication schedule only if the stretch skill ships.) Currently the allergen list is hard-coded server-side (`server/profile.ts`) until this UI exists.
+- **Calendar editor:** add and delete events (title, time, date or repeat, place). Shows who set each item.
 - **Notifications:** on-screen alert for the demo; optional SMS (e.g., Twilio) if time permits (`VERIFY` credits/keys).
 - **Wearer transparency:** "What I shared" log the wearer can ask the glasses to read aloud ("what did you send my daughter?").
 
@@ -189,6 +223,9 @@ Served by the backend (single static page + SSE). No native app.
 5. **Dignity:** framed as protection/independence, not decline (Caldeira et al., CHI 2022; Chang et al., CSCW 2025 on resistance to agent support). The wearer controls sharing.
 6. **Not a medical device.** No diagnosis, no dosing advice, no "safe to eat" certainty.
 7. Hearing: adjustable volume; short utterances; captions in the caregiver/judge view.
+8. **Independence first: private by default.** Things people are too proud to ask for (reading, paperwork, devices, what they are supposed to be doing) are answered in the wearer's ear and are **not** reported to the caregiver. Only safety events (a scam, an allergen, expired food) reach the feed. The wearer chooses their own wake word. Calendar items show who set them.
+9. **The camera is never used without the wearer asking**, and always announces itself first. No ambient or periodic photos.
+10. **Never invent facts the wearer will act on** (times, places, allergens, dates). Those come from code or from text read off the label; when unsure, say so and tell them to check.
 
 ---
 
@@ -211,9 +248,13 @@ Run in the existing `scam-shield` miniapp. Report measured results.
 - Profile/settings UI, Food Check Mode A (barcode → OFF → vision cross-check, with fallbacks) and Mode B (leftover check), cached demo products.
 - *Acceptance:* 3 demo products (one with the wearer's allergen, one expired, one fine) plus one leftover case give correct whispers, and each failure path (not in OFF, unreadable barcode, no network) behaves as specified.
 
+### Phase 2b — Independence layer (Sat afternoon, time-boxed)
+- Wearer-chosen wake word, Ask Grand Guard (done), Calendar: server store + caregiver editor, "what am I supposed to be doing", clock questions, 10-minute reminders.
+- *Acceptance:* with two seeded events, "what am I supposed to be doing" gives the correct answer for now / soon / nothing / nothing-left; a reminder fires once; the calendar answer never contains a time or place that is not in the schedule.
+
 ### Phase 3 — Harden both heroes + polish (to ~21:00)
 - Run each hero 20× in the staged scenes; log latency and failures; fix the top failure modes. Tune whisper wording (≤ 20 words), cooldowns, error fallbacks, volume. Caregiver feed polish (clean layout, readable on a phone, SSE reconnect).
-- **Only if both heroes are solid:** Ask About This Pill (6.3) or fall check-in (6.4), time-boxed to 90 minutes. Otherwise skip.
+- **Only if both heroes are solid:** Ask About This Pill (6.3) or fall check-in (6.6), time-boxed to 90 minutes. Otherwise skip.
 - Freeze features at ~21:00.
 
 ### Phase 4 — Demo, video, submission (Sat night → Sun 8:00)
@@ -258,7 +299,7 @@ Run in the existing `scam-shield` miniapp. Report measured results.
 
 ## 12. Non-goals
 
-Face recognition; continuous video recording; diagnosing or dosing advice; medication dose tracking or "double-dose" warnings; HIPAA compliance; a native caregiver app; distribution via the Mentra store (not supported for miniapps right now).
+Face recognition; ambient or periodic photo-taking (the camera only runs when asked); continuous video recording; reporting private "independence" requests to caregivers; diagnosing or dosing advice; medication dose tracking or "double-dose" warnings; HIPAA compliance; a native caregiver app; distribution via the Mentra store (not supported for miniapps right now).
 
 ## 13. Open questions (answer by end of Phase 0)
 
@@ -267,6 +308,14 @@ Face recognition; continuous video recording; diagnosing or dosing advice; medic
 3. Can the background layer or UI WebView run a face detector? (Else server-side blur.)
 4. Exact TTS/speaker API and whether whispers can be quiet enough.
 5. Does the miniapp stay alive when the phone is locked / app backgrounded?
-6. Wake word availability vs. transcription matching for voice commands.
+6. ~~Wake word availability vs. transcription matching.~~ Answered: no platform wake word is used; we match the transcript (direct phrases plus a wearer-chosen, fuzzily matched wake word). Still open: whether the glasses' button or touch events reach the miniapp (`session.input.onButtonPress` / `onTouch` exist in the SDK) as a no-words trigger.
 7. Which LLM model id and latency budget for the Claude calls (target < 3 s for text, < 6 s with image).
 8. Who owns what among teammates (engine / backend / caregiver UI / Devpost+video)?
+## 14. Change log
+
+**v0.2 (Sat Nov 14)**
+- Theme changed to senior independence. Two modes defined (ambient = audio only; manual = wearer asks, camera allowed). Food Check is manual.
+- Added Ask Grand Guard (6.4), Calendar (6.5), wearer-chosen wake word (5.5), principles 8–10, Phase 2b.
+- Built so far: local STT, photo and TTS (Phase 0 passed); Scam Shield with a loose keyword net and Claude deciding; Food Check (Claude reads the label verbatim, plain code judges allergens against `server/profile.ts` and the date); wake word + Ask Grand Guard; voice and speed controls.
+- Deviations from v0.1: the miniapp lives at the repo root (`src/`, `miniapp.json`), not `/miniapp`; `processing: "localOnly"` replaces the deprecated `forceLocal`; SDK is 3.4.0. Food Check is vision-only for now (barcode and Open Food Facts are not built). The server is exposed through a Cloudflare quick tunnel with no auth yet. Add a shared-secret header before any public demo.
+- Demo idea: add a 5-second calendar beat ("what am I supposed to be doing?" → "Right now, you have bingo at the bingo hall.") to show independence, not just protection.
