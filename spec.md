@@ -46,7 +46,7 @@ The modes are defined by what they use, not by the skill's topic. **The camera i
 | **Ask Ally** (manual) | Wearer's own wake word + a natural request ("read this", "what does this letter mean", "how do I use this remote", "say that again") | Photo when the request is about something visible; Claude answers in ≤ 35 words, plain language. Private by default (see 6.4) |
 | **Calendar** (manual query + ambient reminders) | No wake word: "what am I supposed to be doing", "what's next", "what time is it"; plus a spoken reminder before an event | Answers from a caregiver-maintained schedule with plain code, never an LLM guess (see 6.5) |
 | *(stretch, cut first)* Ask About This Pill | Voice: "check this bottle" | Reads the label and explains the directions in plain language; compares to the caregiver's schedule. No dose tracking claims (see 6.3) |
-| *(stretch, cut first)* Fall check-in | IMU impact spike | Asks "are you okay?", listens, photo + alert caregiver if no answer |
+| Fall check-in (built) | Wearer says "I've fallen" / "I can't get up" | Asks "Are you okay?", listens 15 s; "I'm okay" cancels, "help" or silence alerts the caregiver. Not automatic detection (see 6.6) |
 
 **Scope decision (Sat 7:15 AM): we build Scam Shield and Food Check as the two hero skills and polish them. Everything else is a stretch and gets cut before either hero is compromised.**
 **Update (Sat Nov 14): Ask Ally and the Calendar are added as the independence layer. They reuse the same voice, photo, Claude and whisper path, so each is small. Cut rule unchanged: they are cut before either hero is compromised. Voice-added calendar events are an extension, not scope.**
@@ -100,8 +100,8 @@ Mentra Live glasses ──BLE/Wi-Fi──► Phone (Mentra App)
 Key facts from the docs (as of Nov 14, 2026):
 - **Miniapp SDK (`@mentra/miniapp`)**: code runs **on the phone inside the Mentra App**, not in the cloud and not on the glasses. Glasses capture/play only.
 - Background layer is a **bare JS engine** (no DOM, no Node, no canvas); `fetch`, `WebSocket`, `localStorage`, timers, `atob/btoa`, limited `crypto` exist. UI layer is a WebView with no hardware access; it talks to the background via messaging.
-- APIs we expect to use (confirm exact signatures via the docs MCP): `session.camera.takePhoto({size, compress, transferMethod})` → returns `{photoUrl (signed, ~30 min TTL), mimeType, size, requestId}` (not raw bytes); transcription subscription with **`forceLocal: true`** (on-device STT, text only; default is cloud STT); `session.mic` (raw chunks, VAD); text-to-speech/speaker module; `session.imu` (`onHeadPosition` up/down transitions, `onAccel` raw {x,y,z} in g).
-- Manifest `miniapp.json` must declare `CAMERA` and `MICROPHONE` permissions (and IMU requirement if used, mark OPTIONAL).
+- APIs we expect to use (confirm exact signatures via the docs MCP): `session.camera.takePhoto({size, compress, transferMethod})` → returns `{photoUrl (signed, ~30 min TTL), mimeType, size, requestId}` (not raw bytes); transcription subscription with **`forceLocal: true`** (on-device STT, text only; default is cloud STT); `session.mic` (raw chunks, VAD); text-to-speech/speaker module. (`session.imu` exists but its accelerometer stream is documented as G2-only, so we do not use it.)
+- Manifest `miniapp.json` must declare `CAMERA` and `MICROPHONE` permissions (no IMU requirement: we do not use the motion sensors).
 - **Design rule: the phone never handles image bytes.** Pass the signed `photoUrl` to our backend and let the backend download it. Never block a step on vision; vision results arrive asynchronously and are whispered when ready.
 - Mentra's docs banner **recommends the Bluetooth SDK (`@mentra/bluetooth-sdk`) for Mentra Live** — a native/React Native app we would build that connects directly to the glasses and could do local face blur. That is our **fallback**, decided at the Phase 0 gate. Don't start it unless Phase 0 says we must.
 
@@ -127,7 +127,7 @@ interface Verdict {
 
 interface Skill {
   id: string;
-  triggers: Trigger[];           // keyword/phrase, voice command, imu
+  triggers: Trigger[];           // keyword/phrase, voice command
   needsPhoto: boolean;
   photoOptions?: { size: "low"|"medium"|"high"; compress: "none"|"low"|"medium"|"high" };
   analyze(ctx: { transcriptWindow: string; photoUrl?: string; profile: Profile }): Promise<Verdict>;
@@ -200,8 +200,11 @@ Engine responsibilities (miniapp background layer):
 - **Wearer adds events by voice (built):** "remind me to call Sam at 3" → the router (5.6) returns a structured event, the glasses read it back ("Add Call Sam today at 3 PM? Say yes or no."), and only a "yes" saves it, marked `setBy: "wearer"` ("set by them" on the caregiver page). Any other reply, or no reply in 12 s, drops it.
 - **Extension (not scope):** Google Calendar via a secret iCal link (recurrence rules are the hard part).
 
-### 6.6 Fall check-in (stretch, only if everything else works)
-- `session.imu.onAccel`: detect free-fall dip → impact spike → stillness (`VERIFY` sample rate and background streaming; no gyro found). On suspected fall: TTS "Are you okay?", listen ~30 s; if no reply, take a photo and alert caregiver. Accept "I'm fine" to cancel (this is the false-positive control).
+### 6.6 Fall check-in (built, voice-started)
+- **We do not detect falls automatically.** The SDK's accelerometer stream is documented as G2-only, and we could not rely on it for Mentra Live, so no motion sensor is read. Say so plainly in the pitch: Ally asks, listens and alerts; it does not detect the fall itself.
+- Trigger: the wearer says "I fell", "I've fallen", "I can't get up", "I slipped and fell" or "I had a fall" (with or without the wake word; "I fell asleep" and similar do not count). Ally asks "Are you okay? Say I'm okay, or say help." and listens for 15 s. "I'm okay" or "false alarm" cancels (the false-positive control). "Help", "no", "I'm hurt" or silence sends a danger event to the caregiver feed (no transcript, no photo) and says "I've told your family. Stay calm, help is on the way" only if the backend accepted it; otherwise "I could not reach your family. Please call someone now."
+- No photo is taken (principle 9: the camera is never used without the wearer asking).
+- Caveat: "help is on the way" only means the caregiver feed was notified. Nobody is dispatched.
 
 ---
 
@@ -283,7 +286,7 @@ Run in the existing `scam-shield` miniapp. Report measured results.
 ```
 /                      README.md, SPEC.md, LICENSE (MIT)
 /miniapp               Mentra miniapp (existing scaffold: bunx create-mentra-miniapp)
-  miniapp.json         permissions: CAMERA, MICROPHONE (+ IMU optional)
+  miniapp.json         permissions: CAMERA, MICROPHONE (no IMU)
   src/background       engine, triggers, skills glue, TTS, event POST
   src/ui               React UI (debug panel, face-detect experiment)
 /server                Bun backend: /analyze, /events (SSE), /settings, barcode, OFF, LLM
@@ -314,6 +317,9 @@ Face recognition; ambient or periodic photo-taking (the camera only runs when as
 7. Which LLM model id and latency budget for the Claude calls (target < 3 s for text, < 6 s with image).
 8. Who owns what among teammates (engine / backend / caregiver UI / Devpost+video)?
 ## 14. Change log
+
+**Fall check-in (Sat Nov 14, late)**
+- Fall check-in is built, started by the wearer's voice only. The accelerometer detection path, its Fall sensor panel and the IMU manifest requirement were removed because the sensor is not available to miniapps on Mentra Live.
 
 **v0.2 (Sat Nov 14)**
 - Theme changed to senior independence. Two modes defined (ambient = audio only; manual = wearer asks, camera allowed). Food Check is manual.

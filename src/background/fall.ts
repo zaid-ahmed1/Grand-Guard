@@ -1,8 +1,8 @@
 /**
- * Fall response. Two ways in, one way out.
+ * Fall response, started by the wearer's own words.
  *
- * In: the wearer says they fell (works on any glasses), or the glasses accelerometer sees free-fall, an impact and then
- * stillness (only on glasses that stream it; Mentra Live may not).
+ * In: the wearer says they fell ("I've fallen", "I can't get up"). We do not detect falls automatically: the glasses'
+ * motion sensors are not available to miniapps, so nothing here watches movement.
  * Out: Ally asks "Are you okay?". "I'm okay" ends it. "Help", "no" or silence for 15 s tells the caregiver.
  * Nothing is sent without that check-in, and the wearer can always dismiss a false alarm by speaking.
  */
@@ -15,15 +15,6 @@ const HELP = /\b(help|hurt|pain|ambulance|not (ok|okay|fine|alright)|can'?t (get
 const OK = /\b(i'?m|i am|im) (ok|okay|fine|alright|all right|good|not hurt)\b|\bfalse alarm\b|\bno need\b|^(yes|yeah|yep|ok|okay|fine)\b/
 
 const ASK_MS = 15_000
-/** After one check-in, wait this long before another can start. */
-const COOLDOWN_MS = 60_000
-
-/** Accelerometer thresholds, in g. Resting is about 1 g. */
-const FREE_FALL_G = 0.5
-const IMPACT_G = 2.5
-const IMPACT_WINDOW_MS = 1_200
-const STILL_BAND_G = 0.25
-const STILL_MS = 2_000
 
 export type FallHooks = {
   /** Speak a line and resolve when it has finished. */
@@ -36,13 +27,6 @@ export type FallHooks = {
 export class FallGuard {
   private asking = false
   private timer: ReturnType<typeof setTimeout> | null = null
-  private lastStart = 0
-
-  // Accelerometer state.
-  private freeFallAt = 0
-  private impactAt = 0
-  private samples: {at: number; m: number}[] = []
-  private firstReadingLogged = false
 
   constructor(private h: FallHooks) {}
 
@@ -50,19 +34,13 @@ export class FallGuard {
     return this.asking
   }
 
-  /**
-   * Begin the check-in. Ignored while one is already open. The wearer saying they fell always starts one; only the
-   * sensor is held back for a minute after a check-in (so one tumble cannot start it repeatedly).
-   */
+  /** Begin the check-in. Ignored while one is already open; saying you fell always starts one otherwise. */
   async start(reason: string) {
-    const now = Date.now()
     if (this.asking) return void this.h.log(`fall check-in already open, ignoring (${reason})`)
-    if (reason !== "said" && now - this.lastStart < COOLDOWN_MS) return void this.h.log(`fall sensor ignored (cooldown): ${reason}`)
-    this.lastStart = now
     this.asking = true
     this.h.log(`fall check-in (${reason})`)
     await this.h.say("Are you okay? Say I'm okay, or say help.")
-    // Whoever answered during the question (asking can end early) is already handled.
+    // The wearer may have answered while the question was still being spoken.
     if (!this.asking) return
     this.timer = setTimeout(() => void this.finish("no response"), ASK_MS)
   }
@@ -93,32 +71,5 @@ export class FallGuard {
           : "No response. I've told your family. Stay calm, help is on the way."
         : "I could not reach your family. Please call someone now.",
     )
-  }
-
-  /** Feed one accelerometer reading (in g). Starts a check-in on free-fall, then impact, then stillness. */
-  feed(x: number, y: number, z: number, at: number) {
-    if (!this.firstReadingLogged) {
-      this.firstReadingLogged = true
-      this.h.log("accelerometer is streaming (fall sensor active)")
-    }
-    const m = Math.sqrt(x * x + y * y + z * z)
-    this.samples.push({at, m})
-    while (this.samples.length && at - this.samples[0].at > 4_000) this.samples.shift()
-
-    if (m < FREE_FALL_G) this.freeFallAt = at
-    if (m > IMPACT_G && this.freeFallAt && at - this.freeFallAt < IMPACT_WINDOW_MS) {
-      this.impactAt = at
-      this.freeFallAt = 0
-    }
-    if (this.impactAt && at - this.impactAt >= STILL_MS) {
-      const after = this.samples.filter((s) => s.at > this.impactAt + 300)
-      const still = after.length >= 5 && after.every((s) => Math.abs(s.m - 1) < STILL_BAND_G)
-      this.impactAt = 0
-      if (still) void this.start("impact then stillness")
-    }
-  }
-
-  get streaming() {
-    return this.firstReadingLogged
   }
 }

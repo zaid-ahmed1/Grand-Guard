@@ -153,67 +153,6 @@ export class Engine {
     }, {processing: "localOnly"})
     this.log("engine listening (localOnly STT)")
     setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
-
-    // Fall sensor: only glasses that stream an accelerometer will deliver readings. The voice check-in works either way.
-    try {
-      const caps = this.session.capabilities
-      const imuKeys = Object.keys(caps ?? {}).filter((k) => /imu|accel|motion|gyro/i.test(k))
-      this.log(`glasses capabilities: ${Object.keys(caps ?? {}).join(", ") || "none reported"}${imuKeys.length ? ` (motion: ${imuKeys.join(", ")})` : ""}`)
-      this.session.imu.onAccel((d) => this.onAccel(d.x, d.y, d.z, d.timestamp, false))
-      this.session.imu.onHeadPosition((h) => this.session.ui.send("p0:imu", {status: "head position event", head: h.position}))
-      this.session.ui.on("engine:simFall", () => this.simulateFall())
-      setTimeout(() => {
-        if (!this.fall.streaming) {
-          this.log("no accelerometer data from these glasses; fall detection is voice-only (say \"I've fallen\")")
-          this.session.ui.send("p0:imu", {status: "No accelerometer data received. These glasses probably do not stream it, so fall response is voice-only."})
-        }
-      }, 15_000)
-    } catch (e) {
-      this.log(`accelerometer unavailable: ${(e as {message?: string}).message}`)
-    }
-  }
-
-  private accelScale: number | null = null
-  private accelProbe: number[] = []
-  private lastAccelSent = 0
-  private peakSinceSent = 0
-
-  /** One accelerometer reading, real or simulated: feed the fall detector and show it (about 10 per second) in the UI. */
-  private onAccel(rx: number, ry: number, rz: number, at: number, simulated: boolean) {
-    // Android sensors report m/s^2 (resting is about 9.8), while the SDK documents g (resting is about 1). The detector
-    // thinks in g, so look at the first few readings and convert if they are clearly m/s^2.
-    let x = rx, y = ry, z = rz
-    if (!simulated && this.accelScale === null) {
-      this.accelProbe.push(Math.sqrt(rx * rx + ry * ry + rz * rz))
-      if (this.accelProbe.length < 8) return
-      const med = [...this.accelProbe].sort((a, b) => a - b)[4]
-      this.accelScale = med > 5 ? 1 / 9.81 : 1
-      this.log(`accelerometer units: resting reading ${med.toFixed(2)} so treating as ${this.accelScale === 1 ? "g" : "m/s^2 (converted to g)"}`)
-    }
-    if (!simulated && this.accelScale !== null) { x *= this.accelScale; y *= this.accelScale; z *= this.accelScale }
-    this.fall.feed(x, y, z, at)
-    const m = Math.sqrt(x * x + y * y + z * z)
-    this.peakSinceSent = Math.max(this.peakSinceSent, m)
-    const now = Date.now()
-    if (now - this.lastAccelSent < 90) return
-    this.lastAccelSent = now
-    this.session.ui.send("p0:accel", {x, y, z, m, peak: this.peakSinceSent, at: now, simulated})
-    this.peakSinceSent = 0
-  }
-
-  /** Test the detector without a real fall: rest, free-fall, impact, stillness. This really starts the "Are you okay?" check-in. */
-  private simulateFall() {
-    this.log("SIMULATED fall (not a real sensor reading)")
-    const t0 = Date.now()
-    const timer = setInterval(() => {
-      const t = Date.now() - t0
-      const n = () => (Math.random() - 0.5) * 0.04
-      let z = 1
-      if (t >= 800 && t < 1050) z = 0.15
-      else if (t >= 1050 && t < 1150) z = 3.4
-      this.onAccel(n(), n(), z + n(), Date.now(), true)
-      if (t > 4500) clearInterval(timer)
-    }, 40)
   }
 
   private ingest(text: string, forced: boolean) {

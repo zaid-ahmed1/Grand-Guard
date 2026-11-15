@@ -3,7 +3,7 @@
   "packageName": "com.mentra.grand-guard",
   "version": "1.0.0",
   "name": "Ally",
-  "description": "Ally: scam shield, food check, daily help and fall response",
+  "description": "Ally: scam shield, food check, daily help and fall check-in",
   "icon": "icon.png",
   "type": "standard",
   "sdkVersion": "3.4.0",
@@ -33,10 +33,6 @@
     },
     {
       "type": "SPEAKER",
-      "level": "OPTIONAL"
-    },
-    {
-      "type": "IMU",
       "level": "OPTIONAL"
     }
   ]
