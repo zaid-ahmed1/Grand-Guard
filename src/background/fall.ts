@@ -88,7 +88,9 @@ export class FallGuard {
     this.h.log(`fall check-in: ${outcome}, family ${sent ? "notified" : "NOT reached"}`)
     await this.h.say(
       sent
-        ? outcome === "asked for help" ? "Okay. I've told your family." : "No response. I've told your family."
+        ? outcome === "asked for help"
+          ? "Okay. I've told your family. Stay calm, help is on the way."
+          : "No response. I've told your family. Stay calm, help is on the way."
         : "I could not reach your family. Please call someone now.",
     )
   }
