@@ -449,11 +449,11 @@ Most recent statement (judge this one): "${latest}"` : earlier
   private async capturePhoto(
     t0: number,
     size: "medium" | "high" | "max" = PHOTO_SIZE,
-    direct = true,
+    direct = false,
   ): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
     // Let a warm-up in progress finish first (at most 6 s), so the two never collide on the camera.
-    if (this.warming) await Promise.race([this.warming, new Promise((res) => setTimeout(res, 6000))])
+    if (this.warming) await Promise.race([this.warming, new Promise((res) => setTimeout(res, 8000))])
     this.capturing = true
     try {
       for (let attempt = 1; attempt <= 4; attempt++) {
@@ -462,8 +462,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
             size,
             compress: "medium",
             sound: false,
-            timeoutMs: 15_000,
-            // Direct Wi-Fi upload only: the slow Bluetooth relay is what left photo jobs stuck.
+            timeoutMs: 30_000,
+            // "auto" lets the glasses pick Wi-Fi and fall back to Bluetooth themselves. Forcing direct timed out on a cold
+          // start, and abandoning a timed-out job left the next photo blocked ("another photo job is in progress").
             transferMethod: direct ? "direct" : "auto",
           })
           this.log(`photo ready (${size}/${direct ? "direct" : "auto"}) at +${Date.now() - t0} ms`)
@@ -497,6 +498,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
     try {
       let photoUrl: string | undefined
       if (look) {
+        this.warmCamera()
         const announce = this.whisper("Taking a photo now.")
         const photo = await this.capturePhoto(t0)
         await announce
@@ -521,6 +523,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
     this.busy = true
     const t0 = Date.now()
     this.log("TRIGGER food check")
+    this.warmCamera() // also covers food requests that did not use the wake word
     try {
       // Pass 1 uses the size that uploads reliably. If nothing is readable, ask the wearer to move closer and
       // retake once at a sharper size. The camera announces itself both times.
@@ -531,9 +534,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
         // try over the automatic route at medium.
         let photo = await this.capturePhoto(t0)
         if (!photo.url && photo.why === "failed") {
-          this.log("direct upload failed, retrying over the automatic route")
-          await new Promise((res) => setTimeout(res, 3000))
-          photo = await this.capturePhoto(t0, PHOTO_SIZE, false)
+          this.log("photo failed, trying once more")
+          await new Promise((res) => setTimeout(res, 4000))
+          photo = await this.capturePhoto(t0)
         }
         await announce
         if (!photo.url) {
