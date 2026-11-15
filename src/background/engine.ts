@@ -85,6 +85,7 @@ export class Engine {
   /** Camera warm-up state. A cold camera was the cause of 25 s photo timeouts, so it is warmed as soon as the wearer speaks to us. */
   private warming: Promise<void> | null = null
   private warmUntil = 0
+  private warmOffUntil = 0
   private capturing = false
   private wake = DEFAULT_WAKE
   private awaitUntil = 0
@@ -434,7 +435,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
    * use the same size as the capture or it is wasted.
    */
   private warmCamera() {
-    if (this.capturing || this.warming || Date.now() < this.warmUntil - 8000) return
+    if (this.capturing || this.warming || Date.now() < this.warmOffUntil || Date.now() < this.warmUntil - 8000) return
     this.warmUntil = Date.now() + WARM_MS
     const t = Date.now()
     this.warming = this.session.camera
@@ -442,7 +443,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
       .then(() => this.log(`camera warm in ${Date.now() - t} ms`))
       .catch((e) => {
         this.warmUntil = 0
-        this.log(`camera warm-up skipped: ${(e as {message?: string}).message}`)
+        // A warm-up that hangs can collide with the real photo, so one failure turns it off for a while.
+        this.warmOffUntil = Date.now() + 5 * 60_000
+        this.log(`camera warm-up failed, off for 5 minutes: ${(e as {message?: string}).message}`)
       })
       .finally(() => {
         this.warming = null
@@ -456,7 +459,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
   ): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
     // Let a warm-up in progress finish first (at most 6 s), so the two never collide on the camera.
-    if (this.warming) await Promise.race([this.warming, new Promise((res) => setTimeout(res, 8000))])
+    if (this.warming) await Promise.race([this.warming, new Promise((res) => setTimeout(res, 4000))])
     this.capturing = true
     try {
       for (let attempt = 1; attempt <= 4; attempt++) {
