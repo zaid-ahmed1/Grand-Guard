@@ -95,7 +95,7 @@ form { background: var(--card); border: 1px solid var(--line); border-radius: va
 .row { display: flex; flex-direction: column; max-width: 82%; }
 .row.you { align-self: flex-end; align-items: flex-end; }
 .row.guard { align-self: flex-start; align-items: flex-start; }
-.who { font-size: 12px; color: var(--dim); margin: 0 8px 4px; letter-spacing: 0.04em; }
+.who { display: none; font-size: 12px; color: var(--dim); margin: 0 8px 4px; letter-spacing: 0.04em; }
 .bubble { padding: 14px 20px; border-radius: 20px; font-size: 24px; line-height: 1.35; }
 .you .bubble { background: var(--sage); color: #fff; border-bottom-right-radius: 5px; }
 .guard .bubble { background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 5px; color: var(--deep); font-weight: 600; }

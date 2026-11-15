@@ -21,18 +21,14 @@
 <div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
 <h2>Foods to avoid</h2>
 <div class="allergens">
-  <p class="hint" style="margin:0">Type anything: a food, an ingredient, a diet word (for example mushrooms, gluten, pork). Food Check warns when a label contains it or may contain it. Changes save immediately and apply to the next check.</p>
   <form id="avoidForm" class="avoidrow"><input id="avoidIn" placeholder="Add a food to avoid" maxlength="40" autocomplete="off"><button>Add</button></form>
   <div class="tags" id="tags"></div>
-  <div class="hint">Quick add:</div>
   <div class="tags" id="quick"></div>
   <span class="hint" id="avoidMsg"></span>
 </div>
 <h2>Schedule</h2>
-<p class="hint">The glasses answer "what am I supposed to be doing?" from this list, and remind 10 minutes before each item.</p>
 <div class="nav"><button id="prev" type="button">&lsaquo; Previous</button><b id="range"></b><button id="today" type="button">Today</button><button id="next" type="button">Next &rsaquo;</button></div>
 <div class="week" id="cal"></div>
-<p class="legend">Blue: added by family. Green: added by them (by voice). Tap + on a day to add something to it.</p>
 <form id="add">
   <input name="title" placeholder="What (e.g. Bingo)" required maxlength="80">
   <input name="time" type="time" required>
@@ -139,7 +135,7 @@ function renderCal() {
   document.getElementById('cal').innerHTML = days.map(d => {
     const list = events.filter(e => occurs(e, d)).sort((a, b) => a.time.localeCompare(b.time));
     return `<div class="day ${iso(d) === todayIso ? 'today' : ''}"><div class="dh"><b>${esc(d.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'}))}</b><button class="plus" type="button" data-date="${iso(d)}" title="Add to this day">+</button></div>` +
-      (list.map(e => `<div class="chip ${e.setBy === 'wearer' ? 'wearer' : ''}"><span class="t">${esc(fmt(e.time))}</span> ${esc(e.title)}${e.place ? `<div class="hint">${esc(e.place)}</div>` : ''}${repeatNote(e) ? `<div class="hint">${repeatNote(e)}</div>` : ''}<button class="x" type="button" data-id="${esc(e.id)}" data-title="${esc(e.title)}" data-rep="${esc(repeatNote(e))}" title="Remove">&times;</button></div>`).join('') || '<div class="none">Nothing planned</div>') + '</div>';
+      (list.map(e => `<div class="chip ${e.setBy === 'wearer' ? 'wearer' : ''}"><span class="t">${esc(fmt(e.time))}</span> ${esc(e.title)}${e.place ? `<div class="hint">${esc(e.place)}</div>` : ''}<button class="x" type="button" data-id="${esc(e.id)}" data-title="${esc(e.title)}" data-rep="${esc(repeatNote(e))}" title="Remove">&times;</button></div>`).join('') || '<div class="none">Nothing planned</div>') + '</div>';
   }).join('');
 }
 document.getElementById('prev').onclick = () => { weekStart = addDays(weekStart, -7); renderCal(); };
