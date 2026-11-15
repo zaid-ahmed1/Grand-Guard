@@ -18,6 +18,8 @@ const COOLDOWN_MS = 10_000
 /** One photo size for warm-up and capture (a mismatch makes the camera reconfigure, which is slow). */
 const PHOTO_SIZE = "high" as const
 const WARM_MS = 30_000
+/** 1 = leave auto-exposure alone. Raise toward 2 if photos are still too bright, lower to 1 if they come out dark. */
+const EXPOSURE_DIVISOR = 1.6
 // Inlined at build time by `define`; the bare JS engine has no `process` global, so guard it.
 const DEFAULT_BACKEND: string = typeof process !== "undefined" ? (process.env.MENTRA_PUBLIC_BACKEND_URL ?? "") : ""
 
@@ -463,6 +465,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
             compress: "medium",
             sound: false,
             timeoutMs: 30_000,
+          // Auto-exposure overshoots on bright scenes and white packaging, which washes out label text. Pull the metered
+          // exposure down a little. (SDK: "after AE convergence, divide the metered exposure by this factor".)
+          aeExposureDivisor: EXPOSURE_DIVISOR,
             // "auto" lets the glasses pick Wi-Fi and fall back to Bluetooth themselves. Forcing direct timed out on a cold
           // start, and abandoning a timed-out job left the next photo blocked ("another photo job is in progress").
             transferMethod: direct ? "direct" : "auto",

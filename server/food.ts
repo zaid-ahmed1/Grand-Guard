@@ -32,7 +32,10 @@ isFood is false if the photo does not show a food or drink item.`
  * What a kind of food usually holds, for when the ingredients cannot be read but the name is clear. Hedged advice
  * only, never a verdict: "usually" are allergens the food normally contains, "watch" are common cross-contact ones.
  */
-const KINDS: {re: RegExp; usually: string[]; watch: string[]}[] = [
+const KINDS: {re: RegExp; usually: string[]; watch: string[]; always?: Record<string, string>}[] = [
+  // "always": dishes that are made with an allergen by definition, so the answer needs no label. The phrase is what is said aloud.
+  {re: /pizza/i, usually: [], watch: ["peanuts", "tree nuts", "soy"], always: {milk: "has cheese, which is dairy", wheat: "has a wheat crust"}},
+  {re: /lasagn|macaroni|mac and|quesadilla/i, usually: [], watch: ["peanuts", "tree nuts", "soy"], always: {milk: "has cheese, which is dairy", wheat: "is made with wheat"}},
   {re: /pretzel/i, usually: ["wheat"], watch: ["peanuts", "tree nuts", "sesame", "milk", "soy"]},
   {re: /cracker|chips?|crisps|popcorn/i, usually: [], watch: ["peanuts", "tree nuts", "wheat", "milk", "soy"]},
   {re: /cookie|biscuit|brownie|cake|muffin|pastry|donut|doughnut/i, usually: ["wheat", "eggs", "milk"], watch: ["peanuts", "tree nuts", "soy"]},
@@ -77,12 +80,23 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     implied.forEach((a) => evidence.push({kind: "allergen", detail: `implied by package name (${name}): ${a}`}))
   }
   const ingredientsUnread = !label.ingredientsText && !label.containsText
+  // A dish that always contains an allergen (pizza has cheese) is answered from what it is, when its ingredients cannot be read.
+  const kind = KINDS.find((k) => k.re.test(named))
+  const typical = ingredientsUnread && kind?.always ? avoid.filter((a) => !hits.includes(a) && !implied.includes(a) && kind.always![a]) : []
+  if (typical.length) {
+    const name = (label.productName || label.frontText || "This dish").replace(/^./, (c) => c.toUpperCase())
+    const claim = /vegan|dairy[- ]free|non[- ]dairy|plant[- ]based|gluten[- ]free|egg[- ]free/i.test(named)
+    const phrase = kind!.always![typical[0]]
+    parts.push(claim
+      ? {sev: "warn", text: `${name} usually ${phrase}, but it makes a free-from claim, so check the ingredients.`}
+      : {sev: "danger", text: `${name} ${phrase}. You avoid ${list(typical)}.`})
+    typical.forEach((a) => evidence.push({kind: "allergen", detail: `typical of ${name}: ${a}`}))
+  }
   if (!ingredientsUnread && !hits.length && !maybe.length && !implied.length) {
     parts.push({sev: "info", text: `No ${list(avoid, "or")} in the ingredients.`})
   }
   const known = label.productName || label.frontText
-  if (ingredientsUnread && !hits.length) {
-    const kind = KINDS.find((k) => k.re.test(named))
+  if (ingredientsUnread && !hits.length && !typical.length) {
     if (known && kind && !implied.length) {
       // The food is recognisable but the ingredients are not readable: say what to watch for, from the wearer's own list.
       const usually = avoid.filter((a) => kind.usually.includes(a))
@@ -101,7 +115,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     }
   }
   // Nothing readable at all, not even what the food is: the photo is too far away or too small.
-  const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length && !known
+  const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length && !typical.length && !known
 
   let dateOk = false
   const noDate = !label.expiry.date
