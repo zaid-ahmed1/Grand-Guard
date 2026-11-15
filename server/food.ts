@@ -104,6 +104,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length && !known
 
   let dateOk = false
+  const noDate = !label.expiry.date
   if (label.expiry.date) {
     const exp = new Date(`${label.expiry.date}T23:59:59`)
     const days = Math.floor((today.getTime() - exp.getTime()) / 86_400_000) + 1
@@ -115,10 +116,8 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
       dateOk = true
       evidence.push({kind: "expiry", detail: `${label.expiry.kind} ${label.expiry.date}, in date`})
     }
-  } else if (!(ingredientsUnread && known && !hits.length)) {
-    // When the ingredients are unreadable the whisper is already long, and the date matters less than the allergens.
-    parts.push({sev: "warn", text: "No date could be read."})
   }
+  // An unreadable date is not announced. It only changes the closing advice below.
 
   if (unreadable) {
     parts.length = 0
@@ -131,7 +130,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   const clean = parts.findIndex((x) => x.sev === "info" && x.text.endsWith("in the ingredients."))
   if (clean > 0) parts.unshift(...parts.splice(clean, 1))
 
-  const advice = severity === "danger" ? "Do not eat this." : severity === "warn" ? "Please check the label before eating." : "Please still check the label."
+  const advice = severity === "danger" ? "Do not eat this." : severity === "warn" ? "Please check the label before eating." : noDate ? "Make sure to check the expiry date." : "Please still check the label."
   const body = parts.length
     ? parts.slice(0, 3).map((p) => p.text).join(" ")
     : `No ${list(avoid, "or")} found on the label, and the date is fine.`
