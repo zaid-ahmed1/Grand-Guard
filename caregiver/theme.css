@@ -25,7 +25,7 @@ b, h1, h2 { color: var(--deep); }
 /* Header bar */
 header { padding: 14px 18px; background: var(--deep); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 header b { color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-header b::before { content: "A"; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--amber); color: var(--deep); font-weight: 800; }
+header b::before { content: ""; width: 34px; height: 34px; background: url("/logo-dark.svg") center / contain no-repeat; }
 header .r { display: flex; align-items: center; gap: 10px; }
 #st { font-size: 12px; opacity: 0.8; }
 
