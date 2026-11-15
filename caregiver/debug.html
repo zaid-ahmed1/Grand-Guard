@@ -1,36 +1,3 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ally · What the AI saw</title>
-<link rel="icon" type="image/svg+xml" href="/logo.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
-<link rel="stylesheet" href="/theme.css"><style>main{max-width:900px;margin:0 auto;padding:12px 16px;display:grid;gap:12px}</style>
-</head>
-<body>
-<header><b>What the AI saw</b> <span id="meta" hidden></span></header>
-<main>
-  <img id="img" alt="" hidden>
-  <pre id="note" hidden></pre>
-  <p id="none" class="hint">No photo yet. Say "check this food" on the glasses.</p>
-</main>
-<script>
-async function tick() {
-  try {
-    const r = await fetch('/debug/last');
-    if (!r.ok) { document.getElementById('none').textContent = r.status === 404 ? 'Open this page on the laptop itself (http://localhost:8787/debug.html). It is blocked on the tunnel.' : 'Error ' + r.status; return; }
-    const j = await r.json();
-    if (!j.at) return;
-    document.getElementById('none').hidden = true;
-    document.getElementById('meta').textContent = j.skill + ' · ' + new Date(j.at).toLocaleTimeString();
-    const img = document.getElementById('img'); img.hidden = false;
-    const src = '/debug/photo?t=' + j.at; if (!img.src.endsWith(src)) img.src = src;
-    const n = document.getElementById('note'); n.hidden = !j.note; n.textContent = j.note ? JSON.stringify(j.note, null, 2) : '';
-  } catch {}
-}
-tick(); setInterval(tick, 3000);
-</script>
-</body>
-</html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/debugger.html#photo"><title>Ally · DEBUGGER</title></head>
+<body><a href="/debugger.html#photo">Open the debugger</a></body></html>

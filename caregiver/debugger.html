@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ally · DEBUGGER</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/theme.css">
+<style>
+  .badge { background: var(--amber); color: var(--deep); font-size: 12px; font-weight: 800; letter-spacing: 0.14em; padding: 4px 10px; border-radius: 6px; }
+  header { border-bottom: 4px solid var(--amber); }
+  .tabs { display: flex; gap: 6px; padding: 10px 16px 0; background: var(--deep); }
+  .tab { background: transparent; color: #cfe3de; border: 0; border-radius: 10px 10px 0 0; padding: 10px 20px; font-size: 15px; }
+  .tab.on { background: var(--bg); color: var(--deep); }
+  .pane { display: none; flex: 1; min-height: 0; }
+  .pane.on { display: flex; flex-direction: column; }
+  body.dbg { height: 100vh; display: flex; flex-direction: column; }
+  #photoPane { padding: 16px; max-width: 900px; width: 100%; margin: 0 auto; gap: 12px; overflow-y: auto; }
+  #pmeta { font-weight: 700; color: var(--deep); }
+  #empty { color: var(--dim); text-align: center; margin-top: 24vh; font-size: 20px; }
+</style>
+</head>
+<body class="dbg">
+<header>
+  <div style="display:flex;align-items:center;gap:12px"><b>Ally</b><span class="badge">DEBUGGER</span></div>
+  <span id="st">connecting…</span>
+</header>
+<nav class="tabs">
+  <button class="tab on" data-tab="chat" type="button">Chat</button>
+  <button class="tab" data-tab="photo" type="button">What the AI saw</button>
+</nav>
+
+<section class="pane on" id="chatPane">
+  <div id="log" class="chatlog"><div id="empty">Waiting for speech. Say “Hey Ally, what time is it?”</div></div>
+  <div style="padding:8px 16px;text-align:right"><button id="clear" type="button">Clear</button></div>
+</section>
+
+<section class="pane" id="photoPane">
+  <div id="pmeta"></div>
+  <img id="img" alt="" hidden>
+  <pre id="note" hidden></pre>
+  <p id="none">No photo yet. Say “Hey Ally, check this food.”</p>
+</section>
+
+<script>
+const BLOCKED = 'Open this page on the laptop itself: http://localhost:8787/debugger.html';
+const st = document.getElementById('st');
+
+// ---- tabs (the address keeps the tab: #chat or #photo) ----
+function show(tab) {
+  if (tab !== 'chat' && tab !== 'photo') tab = 'chat';
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.getElementById('chatPane').classList.toggle('on', tab === 'chat');
+  document.getElementById('photoPane').classList.toggle('on', tab === 'photo');
+  if (location.hash !== '#' + tab) history.replaceState(null, '', '#' + tab);
+  if (tab === 'photo') photoTick();
+  else { const l = document.getElementById('log'); l.scrollTop = l.scrollHeight; }
+}
+document.querySelector('.tabs').onclick = e => { if (e.target.dataset.tab) show(e.target.dataset.tab); };
+window.onhashchange = () => show(location.hash.slice(1));
+
+// ---- chat: what the wearer said and what Ally whispered ----
+let last = 0;
+const log = document.getElementById('log');
+function add(m) {
+  document.getElementById('empty')?.remove();
+  const row = document.createElement('div'); row.className = 'row ' + m.role;
+  const b = document.createElement('div'); b.className = 'bubble'; b.textContent = m.text;
+  row.append(b); log.append(row);
+}
+async function chatTick() {
+  try {
+    const r = await fetch('/chat?since=' + last);
+    if (r.status === 404) { st.textContent = BLOCKED; return; }
+    const msgs = await r.json();
+    st.textContent = 'live';
+    if (msgs.length) { msgs.forEach(m => { add(m); last = Math.max(last, m.id); }); log.scrollTop = log.scrollHeight; }
+  } catch { st.textContent = 'server not reachable'; }
+}
+document.getElementById('clear').onclick = async () => {
+  await fetch('/chat', {method: 'DELETE'}); log.innerHTML = '<div id="empty">Cleared.</div>'; last = 0;
+};
+
+// ---- what the AI saw: the last photo and the model's reading ----
+async function photoTick() {
+  if (!document.getElementById('photoPane').classList.contains('on')) return;
+  try {
+    const r = await fetch('/debug/last');
+    if (!r.ok) { document.getElementById('none').textContent = r.status === 404 ? BLOCKED : 'Error ' + r.status; return; }
+    const j = await r.json();
+    if (!j.at) return;
+    document.getElementById('none').hidden = true;
+    document.getElementById('pmeta').textContent = j.skill + ' · ' + new Date(j.at).toLocaleTimeString();
+    const img = document.getElementById('img'); img.hidden = false;
+    const src = '/debug/photo?t=' + j.at; if (!img.src.endsWith(src)) img.src = src;
+    const n = document.getElementById('note'); n.hidden = !j.note; n.textContent = j.note ? JSON.stringify(j.note, null, 2) : '';
+  } catch {}
+}
+
+show(location.hash.slice(1));
+chatTick(); setInterval(chatTick, 700); setInterval(photoTick, 3000);
+</script>
+</body>
+</html>
