@@ -11,7 +11,7 @@ export function NoiseMeter(): React.JSX.Element {
   useEffect(() => {
     const off = mentra.on("p0:level", (l) => {
       if (l.status) return setStatus(l.status)
-      setStatus("Measuring")
+      setStatus(l.calibrating !== undefined ? `Learning the room's normal noise… ${l.calibrating} s (stay at your normal level)` : "Listening for a loud noise")
       hold.current = Math.max(l.peakDb, hold.current - 1.5)
       setLvl({rmsDb: l.rmsDb, peakDb: l.peakDb, roomDb: l.roomDb})
     })

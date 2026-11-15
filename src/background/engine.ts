@@ -81,6 +81,7 @@ export class Engine {
   private loud = new LoudnessWatcher()
   private lastLevelSent = 0
   private loudNoteLogged = false
+  private calLogged = false
   private fall = new FallGuard({
     say: (t) => this.whisper(t),
     alert: (r, trigger) => this.alertFall(r, trigger),
@@ -187,7 +188,11 @@ export class Engine {
     const now = Date.now()
     if (now - this.lastLevelSent > 100) {
       this.lastLevelSent = now
-      this.session.ui.send("p0:level", {rmsDb: lvl.rmsDb, peakDb: lvl.peakDb, roomDb: lvl.roomDb, at: now})
+      this.session.ui.send("p0:level", {rmsDb: lvl.rmsDb, peakDb: lvl.peakDb, roomDb: lvl.roomDb, at: now, calibrating: lvl.calibrating ? lvl.secondsLeft : undefined})
+    }
+    if (!lvl.calibrating && !this.calLogged) {
+      this.calLogged = true
+      this.log(`room noise calibrated at ${lvl.roomDb.toFixed(0)} dB; loud-noise trigger is on`)
     }
     // Ally's own whispers are loud in the wearer's ear, so ignore the microphone while speaking and just after.
     if (lvl.loud && !this.speaking && now >= this.mutedUntil && !this.fall.active) {
