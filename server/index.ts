@@ -18,6 +18,18 @@ const json = (o: unknown, status = 200) =>
 const chat: {id: number; at: number; role: "you" | "guard"; text: string}[] = []
 let chatId = 0
 
+/** A possible fall, decided by code on the glasses side: the wearer said so, asked for help, or did not answer a check-in. */
+function fallVerdict(reason: string): Verdict {
+  return {
+    skill: "fall",
+    severity: "danger",
+    whisper: "",
+    caregiverSummary: `Possible fall. ${reason === "asked for help" ? "The wearer asked for help." : "The wearer did not respond to a check-in."} Please check on them now.`,
+    needsCaregiver: true,
+    source: "code",
+  }
+}
+
 const rank = {info: 0, warn: 1, danger: 2} as const
 
 function broadcast(ev: CaregiverEvent) {
@@ -72,9 +84,10 @@ Bun.serve({
     if (url.pathname === "/analyze" && req.method === "POST") {
       const t0 = Date.now()
       const body = (await req.json()) as AnalyzeRequest
-      if (!["scam", "food", "ask", "calendar", "route"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
-      const verdict =
-        body.skill === "food" ? await analyzeFood(body)
+      if (!["scam", "food", "ask", "calendar", "route", "fall"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
+      const verdict: Verdict =
+        body.skill === "fall" ? fallVerdict(body.transcriptWindow)
+        : body.skill === "food" ? await analyzeFood(body)
         : body.skill === "ask" ? await analyzeAsk(body)
         : body.skill === "calendar" ? calendarVerdict(body.query ?? "now", body.localNow)
         : body.skill === "route" ? await routeRequest(body)

@@ -3,7 +3,7 @@
   "packageName": "com.mentra.grand-guard",
   "version": "1.0.0",
   "name": "Grand Guard",
-  "description": "Elder-care assistant: scam shield and food check",
+  "description": "Elder-care assistant: scam shield, food check and fall response",
   "icon": "icon.png",
   "type": "standard",
   "sdkVersion": "3.4.0",
@@ -33,6 +33,10 @@
     },
     {
       "type": "SPEAKER",
+      "level": "OPTIONAL"
+    },
+    {
+      "type": "IMU",
       "level": "OPTIONAL"
     }
   ]

@@ -6,6 +6,7 @@
 import type {MiniappSession} from "@mentra/miniapp/background"
 import type {AnalyzeRequest, CalendarEvent, Verdict} from "../shared/types"
 import type {Channels} from "../shared/channels"
+import {FALL_PHRASE, FallGuard} from "./fall"
 import {normalizeTranscript} from "../shared/text"
 import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
 import {DEFAULT_WAKE, findWake, wakeIssue} from "../shared/wake"
@@ -74,6 +75,11 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export class Engine {
   private window: {at: number; text: string}[] = []
   private busy = false
+  private fall = new FallGuard({
+    say: (t) => this.whisper(t),
+    alert: (r) => this.alertFall(r),
+    log: (m) => this.log(m),
+  })
   /** Camera warm-up state. A cold camera was the cause of 25 s photo timeouts, so it is warmed as soon as the wearer speaks to us. */
   private warming: Promise<void> | null = null
   private warmUntil = 0
@@ -143,11 +149,28 @@ export class Engine {
     }, {processing: "localOnly"})
     this.log("engine listening (localOnly STT)")
     setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
+
+    // Fall sensor: only glasses that stream an accelerometer will deliver readings. The voice check-in works either way.
+    try {
+      this.session.imu.onAccel((d) => this.fall.feed(d.x, d.y, d.z, d.timestamp))
+      setTimeout(() => {
+        if (!this.fall.streaming) this.log("no accelerometer data from these glasses; fall detection is voice-only (say \"I've fallen\")")
+      }, 15_000)
+    } catch (e) {
+      this.log(`accelerometer unavailable: ${(e as {message?: string}).message}`)
+    }
   }
 
   private ingest(text: string, forced: boolean) {
     const now = Date.now()
     if (!forced && (this.speaking || now < this.mutedUntil)) return
+
+    // A fall check-in is open: what the wearer says now is the answer to "Are you okay?".
+    if (this.fall.active) {
+      this.chat("you", text)
+      this.fall.hear(normalizeTranscript(text))
+      return
+    }
 
     // Waiting for "yes" or "no" to a read-back? Answer it first. Anything else cancels the pending add.
     if (this.pendingAdd) {
@@ -188,6 +211,7 @@ export class Engine {
 
     // Calendar and clock questions: direct phrases, answered without any wake word.
     const direct = normalizeTranscript(text)
+    if (FALL_PHRASE.test(direct)) return void (this.chat("you", text), this.fall.start("said"))
     if (CALENDAR_COMMAND.test(direct)) return void (this.chat("you", text), this.runCalendar())
     if (CLOCK_COMMAND.test(direct)) return void (this.chat("you", text), this.runClock())
     if (CALENDAR_LOOSE.test(direct) || FOOD_LOOSE.test(direct)) return void (this.chat("you", text), this.routeRequest(text, false))
@@ -277,6 +301,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
     const norm = normalizeTranscript(text)
     this.log(`ASK "${norm}"`)
     if (CANCEL.test(norm)) return this.log("cancelled")
+    if (FALL_PHRASE.test(norm)) return this.fall.start("said")
     if (CALENDAR_COMMAND.test(norm)) return this.runCalendar()
     if (CLOCK_COMMAND.test(norm)) return this.runClock()
     if (FOOD_COMMAND.test(norm) || FOODISH.test(norm)) return this.runFood()
@@ -529,6 +554,17 @@ Most recent statement (judge this one): "${latest}"` : earlier
       await this.whisper("Unable to check this food. Please read the label yourself for allergens and the date.")
     } finally {
       this.busy = false
+    }
+  }
+
+  /** Tell the caregiver about a possible fall. True only if the backend took it. */
+  private async alertFall(reason: string): Promise<boolean> {
+    try {
+      await this.analyze({skill: "fall", transcriptWindow: reason})
+      return true
+    } catch (e) {
+      this.log(`fall alert failed: ${(e as {message?: string}).message}`)
+      return false
     }
   }
 
