@@ -38,7 +38,7 @@ const TOOLS = [
     },
   },
   {name: "tell_time", description: "They asked what time or what day it is.", input_schema: {type: "object", properties: {}}},
-  {name: "check_food", description: "They want to know if a food, leftover or package they are holding is safe to eat or drink, contains an allergen, or is expired. Includes "can I drink this".", input_schema: {type: "object", properties: {}}},
+  {name: "check_food", description: "They want to know if a food, leftover or package they are holding is safe to eat or drink, contains an allergen, or is expired. Includes questions like can I drink this.", input_schema: {type: "object", properties: {}}},
   {name: "scam_check", description: "They want to know whether a call, message, letter, website or person is a scam or trustworthy.", input_schema: {type: "object", properties: {}}},
   {name: "repeat_last", description: "They did not hear or understand what was just said and want it repeated.", input_schema: {type: "object", properties: {}}},
   {
