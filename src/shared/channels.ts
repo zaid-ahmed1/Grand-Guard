@@ -14,6 +14,7 @@ export interface Channels {
   "p0:speak": {text: string; voice: VoiceConfig}
   "engine:setVoice": VoiceConfig
   "engine:setWake": {phrase: string}
+  "engine:simFall": Record<string, never>
 
   // background → WebView
   "engine:backend": {url: string}
@@ -21,6 +22,10 @@ export interface Channels {
   "engine:wake": {phrase: string}
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
+  /** Accelerometer reading in g (about 10 per second for the chart). `peak` is the largest magnitude since the last one. */
+  "p0:accel": {x: number; y: number; z: number; m: number; peak: number; at: number; simulated: boolean}
+  /** What the glasses report about the motion sensor, for the Fall sensor panel. */
+  "p0:imu": {status: string; head?: string}
   "p0:transcript": {text: string; isFinal: boolean; source?: string; latencyMs: number}
   "p0:photoResult": {url: string; mimeType: string; bytes: number; latencyMs: number; size: string; compress: string}
 }
