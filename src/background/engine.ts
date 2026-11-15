@@ -387,12 +387,22 @@ Most recent statement (judge this one): "${latest}"` : earlier
    * The glasses allow one photo job at a time, so this NEVER starts a second photo while one may be in flight:
    * on "busy / another job in progress" it waits and retries the same request; on any other failure it stops.
    */
-  private async capturePhoto(t0: number, size: "medium" | "high" = "medium"): Promise<{url?: string; why?: "busy" | "failed"}> {
+  private async capturePhoto(
+    t0: number,
+    size: "medium" | "high" | "max" = "medium",
+    text = false,
+  ): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
     for (let attempt = 1; attempt <= 4; attempt++) {
       try {
-        const r = await this.session.camera.takePhoto({size, compress: "medium", sound: false, timeoutMs: 25_000})
-        this.log(`photo ready (${size}/medium) at +${Date.now() - t0} ms`)
+        const r = await this.session.camera.takePhoto({
+          size,
+          compress: "medium",
+          sound: false,
+          timeoutMs: 25_000,
+          ...(text ? {mode: "text" as const} : {}),
+        })
+        this.log(`photo ready (${size}${text ? "/text" : ""}) at +${Date.now() - t0} ms`)
         return {url: r.photoUrl}
       } catch (e) {
         const msg = (e as {message?: string}).message ?? String(e)
@@ -449,7 +459,13 @@ Most recent statement (judge this one): "${latest}"` : earlier
       let v: Verdict | undefined
       for (let pass = 1; pass <= 2; pass++) {
         const announce = this.whisper(pass === 1 ? "Checking this food. Taking a photo now." : "Taking a photo now.")
-        const photo = await this.capturePhoto(t0, pass === 1 ? "medium" : "high")
+        // Labels need pixels: try high (text mode) first, and if the glasses cannot deliver it, fall back to medium.
+        let photo = await this.capturePhoto(t0, pass === 1 ? "high" : "max", true)
+        if (!photo.url && photo.why === "failed") {
+          this.log("sharp photo failed, falling back to medium")
+          await new Promise((res) => setTimeout(res, 3000))
+          photo = await this.capturePhoto(t0, "medium")
+        }
         await announce
         if (!photo.url) {
           if (v) break // the sharper retry failed: fall back to the first verdict
