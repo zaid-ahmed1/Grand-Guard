@@ -1,5 +1,5 @@
 /**
- * "Ask Grand Guard": a discreet helper for things people hesitate to ask a person about
+ * "Ask Ally": a discreet helper for things people hesitate to ask a person about
  * (small print, paperwork, devices). Private by default: nothing goes to the caregiver
  * feed unless the item looks like a scam.
  */

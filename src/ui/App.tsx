@@ -47,7 +47,7 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <h1>Grand Guard (debug)</h1>
+      <h1>Ally (debug)</h1>
 
       <h2>Engine</h2>
       <input value={backend} placeholder="http://<laptop-LAN-IP>:8787" onChange={(e) => setBackend(e.target.value)} style={{width: "100%"}} />

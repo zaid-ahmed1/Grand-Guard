@@ -1,4 +1,4 @@
-/** Grand Guard backend: /analyze, /events (+SSE), static caregiver page. */
+/** Ally backend: /analyze, /events (+SSE), static caregiver page. */
 import {analyzeScam} from "./llm"
 import {analyzeFood} from "./food"
 import {analyzeAsk} from "./ask"
@@ -108,7 +108,7 @@ Bun.serve({
       if (url.pathname === "/debug/photo" && l) return new Response(Buffer.from(l.data, "base64"), {headers: {"content-type": l.type, "cache-control": "no-store"}})
       return new Response("not found", {status: 404})
     }
-    // Demo chat: the phone posts what the wearer said and what Grand Guard whispered. Held in memory only, and only
+    // Demo chat: the phone posts what the wearer said and what Ally whispered. Held in memory only, and only
     // the laptop may read it (the public tunnel can post lines but never see them). CHAT_FEED=0 turns it off.
     if (url.pathname === "/chat" && req.method === "POST") {
       if (process.env.CHAT_FEED === "0") return json({ok: false})

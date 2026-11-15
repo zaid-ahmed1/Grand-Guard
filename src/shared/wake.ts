@@ -4,7 +4,7 @@
  */
 import {normalizeTranscript} from "./text"
 
-export const DEFAULT_WAKE = "grand guard"
+export const DEFAULT_WAKE = "hey ally"
 
 function lev(a: string, b: string): number {
   const d = Array.from({length: a.length + 1}, (_, i) => [i, ...Array(b.length).fill(0)])

@@ -1,4 +1,4 @@
-# SPEC.md — Grand Guard (formerly "Guardian Glasses")
+# SPEC.md — Ally (formerly "Grand Guard" and "Guardian Glasses")
 
 Elder-care assistant on **Mentra Live** camera glasses. Built at Immerse the Bay 2026 (Stanford, Nov 13–15).
 Status: **v0.2 (Nov 14): the theme is now senior independence, with two modes (ambient and manual) and a calendar. See §2, §6.4–6.5 and the change log in §14.** Anything marked `VERIFY` is an unconfirmed assumption: test it before building on it.
@@ -32,10 +32,10 @@ Status: **v0.2 (Nov 14): the theme is now senior independence, with two modes (a
 
 ## 2. Product in one paragraph
 
-**Theme: senior independence.** Older adults face many small, high-stakes moments that nobody can google, and many things they are too proud to ask for help with (small print, paperwork, a confusing device, what they are supposed to be doing right now). Grand Guard sees and hears what the wearer sees and hears and **whispers a short, calm answer in their ear**. Nobody else in the room knows it helped. Safety events (a scam, an allergen) go quietly to a caregiver as an **event, not footage**; everything else stays private to the wearer. One shared engine, several "skills", in two modes:
+**Theme: senior independence.** Older adults face many small, high-stakes moments that nobody can google, and many things they are too proud to ask for help with (small print, paperwork, a confusing device, what they are supposed to be doing right now). Ally sees and hears what the wearer sees and hears and **whispers a short, calm answer in their ear**. Nobody else in the room knows it helped. Safety events (a scam, an allergen) go quietly to a caregiver as an **event, not footage**; everything else stays private to the wearer. One shared engine, several "skills", in two modes:
 
 **Ambient mode** (audio only, always listening, no camera, speaks only when something is wrong or due): Scam Shield, calendar reminders.
-**Manual mode** (the wearer asks; the camera is allowed and always announces itself): Food Check, Ask Grand Guard (read this, explain this, how do I use this, say that again), and calendar questions.
+**Manual mode** (the wearer asks; the camera is allowed and always announces itself): Food Check, Ask Ally (read this, explain this, how do I use this, say that again), and calendar questions.
 
 The modes are defined by what they use, not by the skill's topic. **The camera is never used without the wearer asking** (no ambient photo-taking), which is why Food Check is manual.
 
@@ -43,13 +43,13 @@ The modes are defined by what they use, not by the skill's topic. **The camera i
 |---|---|---|
 | **Scam Shield** (HERO #1) | Scam-like phrases in live transcript, or voice command | Looks at the screen/letter + listens, whispers "this looks like a scam, don't pay", alerts caregiver |
 | **Food Check** ("Is this safe for me?") (HERO #2) | Voice: "check this food" / "check this leftover" | Packaged food: barcode/label → allergens vs. wearer's profile, expiry date, (stretch) recalls. Leftovers: asks how old it is, warns if past guidance |
-| **Ask Grand Guard** (manual) | Wearer's own wake word + a natural request ("read this", "what does this letter mean", "how do I use this remote", "say that again") | Photo when the request is about something visible; Claude answers in ≤ 35 words, plain language. Private by default (see 6.4) |
+| **Ask Ally** (manual) | Wearer's own wake word + a natural request ("read this", "what does this letter mean", "how do I use this remote", "say that again") | Photo when the request is about something visible; Claude answers in ≤ 35 words, plain language. Private by default (see 6.4) |
 | **Calendar** (manual query + ambient reminders) | No wake word: "what am I supposed to be doing", "what's next", "what time is it"; plus a spoken reminder before an event | Answers from a caregiver-maintained schedule with plain code, never an LLM guess (see 6.5) |
 | *(stretch, cut first)* Ask About This Pill | Voice: "check this bottle" | Reads the label and explains the directions in plain language; compares to the caregiver's schedule. No dose tracking claims (see 6.3) |
 | *(stretch, cut first)* Fall check-in | IMU impact spike | Asks "are you okay?", listens, photo + alert caregiver if no answer |
 
 **Scope decision (Sat 7:15 AM): we build Scam Shield and Food Check as the two hero skills and polish them. Everything else is a stretch and gets cut before either hero is compromised.**
-**Update (Sat Nov 14): Ask Grand Guard and the Calendar are added as the independence layer. They reuse the same voice, photo, Claude and whisper path, so each is small. Cut rule unchanged: they are cut before either hero is compromised. Voice-added calendar events are an extension, not scope.**
+**Update (Sat Nov 14): Ask Ally and the Calendar are added as the independence layer. They reuse the same voice, photo, Claude and whisper path, so each is small. Cut rule unchanged: they are cut before either hero is compromised. Voice-added calendar events are an extension, not scope.**
 
 **Users:** the *wearer* (older adult, voice-only interaction, chooses their own wake word) and the *caregiver* (web feed, settings and calendar).
 
@@ -141,7 +141,7 @@ Engine responsibilities (miniapp background layer):
 4. Debounce: per-skill cooldown (e.g., 30 s) so we don't spam whispers.
 5. Voice commands. There is no platform wake word, so the engine matches the transcript. Two kinds:
    - **Direct phrases, no wake word:** "check this food", "is this a scam?", and the calendar and clock questions ("what am I supposed to be doing", "what's next", "what time is it"). These are unlikely in normal conversation, and the person who most needs the calendar answer is the one most likely to forget a wake word.
-   - **Wearer-chosen wake word** (default "grand guard", at least 4 letters), matched fuzzily because on-device STT mishears names. "<wake> <request>" or a bare "<wake>" (the glasses say "Listening." and wait 8 s). Claude-free routing sends the request to food, scam, calendar, "say that again" or the general Ask skill; "cancel" or "never mind" stops it.
+   - **Wearer-chosen wake word** (default "hey ally", at least 4 letters), matched fuzzily because on-device STT mishears names. "<wake> <request>" or a bare "<wake>" (the glasses say "Listening." and wait 8 s). Claude-free routing sends the request to food, scam, calendar, "say that again" or the general Ask skill; "cancel" or "never mind" stops it.
    - The glasses **ignore transcripts while they are speaking** (and for ~1 s after) so their own whispers are never treated as commands or added to the scam window.
 6. **Router (tool use) for unclear phrasing.** Clear phrases match locally with no lag. Anything else that is addressed to the assistant (wake word, or loose schedule words like "what do I have", "remind me") goes to **one Claude Haiku call with tools**: `check_calendar`, `add_calendar_event`, `tell_time`, `check_food`, `scam_check`, `repeat_last`, `look_and_answer`, `answer`, `not_for_me`. The model only picks the tool and fills parameters ("5pm" → 17:00, "tomorrow" → a date); schedule answers are still produced by code. Measured 0.5–1.4 s per route (14 test phrasings, local, no tunnel). It never runs on ordinary conversation, and if it is unreachable an addressed request falls back to the general Ask skill.
 7. Always degrade gracefully: if photo or vision fails, whisper a safe fallback ("I couldn't read that, ask your caregiver") and log it.
@@ -177,7 +177,7 @@ Engine responsibilities (miniapp background layer):
 - **Safety rules (non-negotiable):** never say "you haven't taken it" or "go ahead and take it" based on missing data; "no record" is not permission. No dosing advice, no diagnosing, no "it's safe." When unsure: "Check with your caregiver or pharmacist."
 - Framed as a label reader, not a medical device.
 
-### 6.4 Ask Grand Guard (manual, independence layer)
+### 6.4 Ask Ally (manual, independence layer)
 - **Purpose:** the things people hesitate to ask a person about: small print, paperwork, doctor-speak, a device they cannot work, a sentence they missed.
 - **Trigger:** wearer's wake word + natural speech. Claude is not used for routing: keywords pick food / scam / calendar / "say that again" / general. General requests that mention something visible ("this", "read", "letter", "menu", "remote") take a high-resolution photo (announced first).
 - **Answer:** Claude (Sonnet with a photo, Haiku without), ≤ 35 words, plain, respectful, never mentions age or ability. Reads the important parts (who, amount, date, what is asked), gives one step at a time for devices, says what to adjust if it cannot read the image, explains health text without diagnosing and points to the doctor or pharmacist.
@@ -251,7 +251,7 @@ Run in the existing `scam-shield` miniapp. Report measured results.
 - *Acceptance:* 3 demo products (one with the wearer's allergen, one expired, one fine) plus one leftover case give correct whispers, and each failure path (not in OFF, unreadable barcode, no network) behaves as specified.
 
 ### Phase 2b — Independence layer (Sat afternoon, time-boxed)
-- Wearer-chosen wake word, Ask Grand Guard (done), Calendar: server store + caregiver editor, "what am I supposed to be doing", clock questions, 10-minute reminders.
+- Wearer-chosen wake word, Ask Ally (done), Calendar: server store + caregiver editor, "what am I supposed to be doing", clock questions, 10-minute reminders.
 - *Acceptance:* with two seeded events, "what am I supposed to be doing" gives the correct answer for now / soon / nothing / nothing-left; a reminder fires once; the calendar answer never contains a time or place that is not in the schedule.
 
 ### Phase 3 — Harden both heroes + polish (to ~21:00)
@@ -317,8 +317,8 @@ Face recognition; ambient or periodic photo-taking (the camera only runs when as
 
 **v0.2 (Sat Nov 14)**
 - Theme changed to senior independence. Two modes defined (ambient = audio only; manual = wearer asks, camera allowed). Food Check is manual.
-- Added Ask Grand Guard (6.4), Calendar (6.5), wearer-chosen wake word (5.5), principles 8–10, Phase 2b.
-- Built so far: local STT, photo and TTS (Phase 0 passed); Scam Shield with a loose keyword net and Claude deciding; Food Check (Claude reads the label verbatim, plain code judges allergens against `server/profile.ts` and the date); wake word + Ask Grand Guard; voice and speed controls.
+- Added Ask Ally (6.4), Calendar (6.5), wearer-chosen wake word (5.5), principles 8–10, Phase 2b.
+- Built so far: local STT, photo and TTS (Phase 0 passed); Scam Shield with a loose keyword net and Claude deciding; Food Check (Claude reads the label verbatim, plain code judges allergens against `server/profile.ts` and the date); wake word + Ask Ally; voice and speed controls.
 - Deviations from v0.1: the miniapp lives at the repo root (`src/`, `miniapp.json`), not `/miniapp`; `processing: "localOnly"` replaces the deprecated `forceLocal`; SDK is 3.4.0. Food Check is vision-only for now (barcode and Open Food Facts are not built). The server is exposed through a Cloudflare quick tunnel with no auth yet. Add a shared-secret header before any public demo.
 - Demo idea: add a 5-second calendar beat ("what am I supposed to be doing?" → "Right now, you have bingo at the bingo hall.") to show independence, not just protection.
 - **Router + wearer-added events (Sat Nov 14, later):** unclear phrasing goes through a Haiku tool-use router (see 5.6) instead of only regexes; "what do I have at 5pm", "am I free tomorrow", "remind me to call Sam at 3" now work, with a spoken read-back and a "yes" before anything is saved. Vague times ("afternoon") list the day instead of guessing a clock time.

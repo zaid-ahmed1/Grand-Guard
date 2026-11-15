@@ -1,4 +1,4 @@
-# Grand Guard
+# Ally
 
 An elder-care assistant for **Mentra Live** camera glasses. It sees and hears what the wearer sees and hears, **whispers a short warning in their ear at the moment of risk**, and quietly sends an **event (not footage)** to a caregiver.
 

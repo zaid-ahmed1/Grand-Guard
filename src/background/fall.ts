@@ -3,7 +3,7 @@
  *
  * In: the wearer says they fell (works on any glasses), or the glasses accelerometer sees free-fall, an impact and then
  * stillness (only on glasses that stream it; Mentra Live may not).
- * Out: Grand Guard asks "Are you okay?". "I'm okay" ends it. "Help", "no" or silence for 15 s tells the caregiver.
+ * Out: Ally asks "Are you okay?". "I'm okay" ends it. "Help", "no" or silence for 15 s tells the caregiver.
  * Nothing is sent without that check-in, and the wearer can always dismiss a false alarm by speaking.
  */
 

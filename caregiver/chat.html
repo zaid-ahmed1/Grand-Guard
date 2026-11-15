@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Grand Guard · Demo chat</title>
+<title>Ally · Demo chat</title>
 <style>
   :root{--bg:#0f1318;--panel:#171d25;--you:#2d6cdf;--guard:#222b36;--text:#f2f5f9;--dim:#8a97a6}
   *{box-sizing:border-box}
@@ -25,10 +25,10 @@
 </head>
 <body>
 <header>
-  <div><b>Grand Guard</b> <small id="st">connecting…</small></div>
+  <div><b>Ally</b> <small id="st">connecting…</small></div>
   <button id="clear">Clear</button>
 </header>
-<div id="log"><div id="empty">Waiting for speech. Say “Grand Guard, what time is it?”</div></div>
+<div id="log"><div id="empty">Waiting for speech. Say “Hey Ally, what time is it?”</div></div>
 <script>
 let last = 0;
 const log = document.getElementById('log'), st = document.getElementById('st');
@@ -36,7 +36,7 @@ function add(m) {
   document.getElementById('empty')?.remove();
   const row = document.createElement('div'); row.className = 'row ' + m.role;
   const who = document.createElement('div'); who.className = 'who';
-  who.textContent = (m.role === 'you' ? 'You' : 'Grand Guard') + ' · ' + new Date(m.at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'});
+  who.textContent = (m.role === 'you' ? 'You' : 'Ally') + ' · ' + new Date(m.at).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit', second: '2-digit'});
   const b = document.createElement('div'); b.className = 'bubble'; b.textContent = m.text;
   row.append(who, b); log.append(row);
 }

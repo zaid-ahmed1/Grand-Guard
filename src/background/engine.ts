@@ -123,7 +123,8 @@ export class Engine {
       this.log(`whisper voice: ${JSON.stringify(v)}`)
     })
     const savedWake = await this.session.storage.get("wake")
-    if (savedWake) this.wake = savedWake
+    // "grand guard" was the old default (before the rename to Ally), so do not keep it as a chosen word.
+    if (savedWake && savedWake !== "grand guard") this.wake = savedWake
     this.log(`wake word: "${this.wake}"`)
     this.session.ui.on("engine:setWake", async ({phrase}) => {
       const p = phrase.trim()
