@@ -173,11 +173,24 @@ export class Engine {
     }
   }
 
+  private accelScale: number | null = null
+  private accelProbe: number[] = []
   private lastAccelSent = 0
   private peakSinceSent = 0
 
   /** One accelerometer reading, real or simulated: feed the fall detector and show it (about 10 per second) in the UI. */
-  private onAccel(x: number, y: number, z: number, at: number, simulated: boolean) {
+  private onAccel(rx: number, ry: number, rz: number, at: number, simulated: boolean) {
+    // Android sensors report m/s^2 (resting is about 9.8), while the SDK documents g (resting is about 1). The detector
+    // thinks in g, so look at the first few readings and convert if they are clearly m/s^2.
+    let x = rx, y = ry, z = rz
+    if (!simulated && this.accelScale === null) {
+      this.accelProbe.push(Math.sqrt(rx * rx + ry * ry + rz * rz))
+      if (this.accelProbe.length < 8) return
+      const med = [...this.accelProbe].sort((a, b) => a - b)[4]
+      this.accelScale = med > 5 ? 1 / 9.81 : 1
+      this.log(`accelerometer units: resting reading ${med.toFixed(2)} so treating as ${this.accelScale === 1 ? "g" : "m/s^2 (converted to g)"}`)
+    }
+    if (!simulated && this.accelScale !== null) { x *= this.accelScale; y *= this.accelScale; z *= this.accelScale }
     this.fall.feed(x, y, z, at)
     const m = Math.sqrt(x * x + y * y + z * z)
     this.peakSinceSent = Math.max(this.peakSinceSent, m)
