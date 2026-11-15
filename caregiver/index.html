@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ally · Caregiver</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="theme-color" content="#14171c">
 <style>
   body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#14171c}
   header{padding:16px;background:#14171c;color:#fff;display:flex;justify-content:space-between}
@@ -39,10 +43,22 @@
   button{background:#14171c;color:#fff;cursor:pointer}
   .del{background:#fff;color:#d62839;border-color:#d62839;padding:4px 10px}
   .hint{font-size:12px;color:#666}
+  header{align-items:center;gap:10px}
+  header .r{display:flex;align-items:center;gap:10px}
+  #arm{background:#2d6cdf;border-color:#2d6cdf;padding:6px 12px;font-size:13px}
+  #arm.on{background:#2a9d4a;border-color:#2a9d4a}
+  #alarm{position:fixed;inset:0;background:#d62839;color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;z-index:10;animation:flash 1s steps(2) infinite}
+  #alarm.show{display:flex}
+  #alarm h1{font-size:34px;margin:0}
+  #alarm p{font-size:22px;margin:0;max-width:520px}
+  #alarm button{background:#fff;color:#d62839;border:0;font-size:20px;padding:14px 28px;border-radius:10px;font-weight:700}
+  @keyframes flash{50%{background:#a31d2b}}
+  .ev.danger{border-width:8px}
 </style>
 </head>
 <body>
-<header><b>Ally</b><span id="st">connecting…</span></header>
+<header><b>Ally</b><span class="r"><button id="arm" type="button">Turn on alerts</button><span id="st">connecting…</span></span></header>
+<div id="alarm" role="alertdialog"><h1 id="alarmT"></h1><p id="alarmP"></p><button id="alarmX" type="button">I'm on it</button></div>
 <main>
 <h2>Alerts</h2>
 <div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
@@ -88,13 +104,63 @@ function add(e, top = true) {
     ${(e.evidence || []).map(x => `<span class="flag">${esc(x.detail)}</span>`).join('')}`;
   if (old) { old.replaceWith(d); return; }
   top ? feed.prepend(d) : feed.append(d);
-  if (top && navigator.vibrate) navigator.vibrate(200);
+  return !old;
 }
-fetch('/events').then(r => r.json()).then(l => l.reverse().forEach(e => add(e)));
+
+// ---- alerts: sound, vibration, a full-screen banner and a notification for new warn/danger events ----
+// Browsers only allow sound after a tap, so "Turn on alerts" is the one tap that arms everything.
+let actx = null, armed = false, wake = null;
+const store = { get: k => { try { return localStorage.getItem(k) } catch { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch {} } };
+function tone(freq, at, dur, vol = 0.35) {
+  if (!actx) return;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'square'; o.frequency.value = freq; o.connect(g); g.connect(actx.destination);
+  const t = actx.currentTime + at;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+function siren(times) { for (let i = 0; i < times; i++) { tone(880, i * 0.7, 0.3); tone(660, i * 0.7 + 0.32, 0.3); } }
+async function arm() {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); await actx.resume(); } catch {}
+  tone(660, 0, 0.12, 0.2); tone(880, 0.14, 0.12, 0.2);
+  armed = true; store.set('armed', '1');
+  const b = document.getElementById('arm'); b.textContent = 'Alerts on'; b.classList.add('on');
+  try { if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission(); } catch {}
+  try { if (navigator.wakeLock) wake = await navigator.wakeLock.request('screen'); } catch {}
+}
+document.getElementById('arm').onclick = arm;
+document.addEventListener('visibilitychange', async () => { if (armed && document.visibilityState === 'visible') { try { wake = await navigator.wakeLock.request('screen'); } catch {} } });
+function raise(e) {
+  if (!armed || e.severity === 'info') return;
+  if (e.severity === 'danger') {
+    siren(4);
+    if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400, 150, 800]);
+    document.getElementById('alarmT').textContent = e.skill === 'fall' ? 'Possible fall' : 'Alert';
+    document.getElementById('alarmP').textContent = e.summary || e.whisper || '';
+    document.getElementById('alarm').classList.add('show');
+  } else {
+    tone(700, 0, 0.2); tone(900, 0.22, 0.2);
+    if (navigator.vibrate) navigator.vibrate(250);
+  }
+  try {
+    if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
+      navigator.serviceWorker.ready.then(r => r.showNotification(e.severity === 'danger' ? 'Ally: ' + (e.skill === 'fall' ? 'possible fall' : 'alert') : 'Ally: heads up', { body: e.summary || e.whisper || '', tag: e.id, requireInteraction: e.severity === 'danger', vibrate: [300, 100, 300] })).catch(() => {});
+    }
+  } catch {}
+}
+document.getElementById('alarmX').onclick = () => document.getElementById('alarm').classList.remove('show');
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+// Initial load shows history silently. Anything that arrives later (or while reconnecting) raises an alert.
+function sync(loud) {
+  return fetch('/events').then(r => r.json()).then(l => l.reverse().forEach(e => { if (add(e) && loud) raise(e); }));
+}
+sync(false);
 const es = new EventSource('/events/stream');
-es.onopen = () => st.textContent = 'live';
+let opened = false; // the first connection is page load (silent); later ones are reconnects (catch up loudly)
+es.onopen = () => { st.textContent = 'live'; if (opened) sync(true); opened = true; };
 es.onerror = () => st.textContent = 'reconnecting…';
-es.onmessage = m => add(JSON.parse(m.data));
+es.onmessage = m => { const e = JSON.parse(m.data); if (add(e)) raise(e); };
 
 // ---- schedule: a real week calendar, today + next 6 days by default ----
 const p2 = n => String(n).padStart(2, '0');

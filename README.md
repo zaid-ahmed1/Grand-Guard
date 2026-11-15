@@ -68,3 +68,16 @@ The phone and laptop must be on the same network. If the QR shows a `169.254.x.x
 ## License
 
 [MIT](./LICENSE)
+
+## Caregiver app on an Android phone (runs from the laptop, no deployment)
+
+The caregiver page is an installable web app. It is served by the local backend (`bun run server`, port 8787).
+
+A phone only allows install, notifications and wake lock on a secure address, so use one of:
+
+1. **USB (recommended):** `adb reverse tcp:8787 tcp:8787`, then open `http://localhost:8787` in Chrome on the phone.
+2. **Same Wi-Fi:** in Chrome on the phone open `chrome://flags`, enable "Insecure origins treated as secure", add `http://<laptop-ip>:8787`, restart Chrome, then open that address.
+3. **Cloudflare tunnel URL:** works over HTTPS but is public and the address changes each run.
+
+Then tap **Turn on alerts** once (browsers only allow sound after a tap) and use Chrome's menu, **Add to Home screen / Install app**.
+New warning and danger events play a sound, vibrate, show a full-screen banner and send a notification.
