@@ -28,6 +28,17 @@ Rules: copy label text verbatim. frontText is the wording on the front of the pa
 For the date: "use by"/"expires"/"exp" are use_by or expires, "best by"/"best before"/"BB" are best_by. If only month and year are shown, use the last day of that month. If the format is ambiguous (for example 03/04/25), set date to null but keep the text.
 isFood is false if the photo does not show a food or drink item.`
 
+/**
+ * What a kind of food usually holds, for when the ingredients cannot be read but the name is clear. Hedged advice
+ * only, never a verdict: "usually" are allergens the food normally contains, "watch" are common cross-contact ones.
+ */
+const KINDS: {re: RegExp; usually: string[]; watch: string[]}[] = [
+  {re: /pretzel/i, usually: ["wheat"], watch: ["peanuts", "tree nuts", "sesame", "milk", "soy"]},
+  {re: /cracker|chips?|crisps|popcorn/i, usually: [], watch: ["peanuts", "tree nuts", "wheat", "milk", "soy"]},
+  {re: /cookie|biscuit|brownie|cake|muffin|pastry|donut|doughnut/i, usually: ["wheat", "eggs", "milk"], watch: ["peanuts", "tree nuts", "soy"]},
+  {re: /candy|chocolate|granola|trail mix|bar/i, usually: [], watch: ["peanuts", "tree nuts", "milk", "soy", "wheat"]},
+]
+
 const plural = (n: number) => `${n} day${n === 1 ? "" : "s"}`
 const list = (xs: string[], word = "and") => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} ${word} ${xs[xs.length - 1]}`)
 
@@ -66,9 +77,28 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     implied.forEach((a) => evidence.push({kind: "allergen", detail: `implied by package name (${name}): ${a}`}))
   }
   const ingredientsUnread = !label.ingredientsText && !label.containsText
-  if (ingredientsUnread && !hits.length) parts.push({sev: "warn", text: "The ingredients could not be read."})
-  // Nothing at all could be read and nothing is implied by the name: the photo is too far away or too small.
-  const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length
+  const known = label.productName || label.frontText
+  if (ingredientsUnread && !hits.length) {
+    const kind = KINDS.find((k) => k.re.test(named))
+    if (known && kind && !implied.length) {
+      // The food is recognisable but the ingredients are not readable: say what to watch for, from the wearer's own list.
+      const usually = avoid.filter((a) => kind.usually.includes(a))
+      const watch = avoid.filter((a) => kind.watch.includes(a) && !usually.includes(a))
+      const rest = avoid.filter((a) => !usually.includes(a) && !watch.includes(a))
+      const text = [
+        `This looks like ${known.toLowerCase()}.`,
+        usually.length ? `These usually contain ${list(usually)}.` : rest.length ? `These probably don't contain ${list(rest, "or")}.` : "",
+        watch.length ? `Watch for ${list(watch, "or")}.` : "",
+        "The ingredients could not be read.",
+      ].filter(Boolean).join(" ")
+      parts.push({sev: "warn", text})
+      evidence.push({kind: "allergen", detail: `ingredients unread; recognised as ${known}`})
+    } else {
+      parts.push({sev: "warn", text: known && !implied.length ? `This looks like ${known.toLowerCase()}, but the ingredients could not be read.` : "The ingredients could not be read."})
+    }
+  }
+  // Nothing readable at all, not even what the food is: the photo is too far away or too small.
+  const unreadable = ingredientsUnread && !label.expiry.date && !hits.length && !implied.length && !known
 
   let dateOk = false
   if (label.expiry.date) {
