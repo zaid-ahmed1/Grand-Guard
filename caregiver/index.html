@@ -37,6 +37,12 @@
   .allergens label{display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid #ccd;border-radius:6px;cursor:pointer;text-transform:capitalize}
   .allergens label.on{background:#fdecee;border-color:#d62839;font-weight:600}
   .legend{font-size:12px;color:#666;margin-top:6px}
+  .avoidrow{display:flex;gap:8px;padding:0;background:none;margin:8px 0}
+  .avoidrow input{flex:1}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+  .tag{background:#fdecee;border:1px solid #d62839;border-radius:16px;padding:4px 6px 4px 12px;font-weight:600;display:flex;align-items:center;gap:4px}
+  .tag button{background:transparent;color:#d62839;border:0;padding:0 6px;font-size:18px;line-height:1}
+  .sug{background:#fff;color:#14171c;border:1px dashed #99a;border-radius:16px;padding:4px 12px;text-transform:capitalize}
   @media(max-width:760px){.week{grid-template-columns:1fr}.day{min-height:0}}
   form{background:#fff;border-radius:8px;padding:12px 14px;display:grid;gap:8px}
   input,select,button{font:inherit;padding:8px;border:1px solid #ccd;border-radius:6px}
@@ -64,9 +70,12 @@
 <div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
 <h2>Foods to avoid</h2>
 <div class="allergens">
-  <p class="hint" style="margin:0">Food Check warns the wearer when a label contains one of these, or may contain it. It applies to the next check.</p>
-  <div class="opts" id="opts"></div>
-  <button id="saveAvoid" type="button">Save</button> <span class="hint" id="avoidMsg"></span>
+  <p class="hint" style="margin:0">Type anything: a food, an ingredient, a diet word (for example mushrooms, gluten, pork). Food Check warns when a label contains it or may contain it. Changes save immediately and apply to the next check.</p>
+  <form id="avoidForm" class="avoidrow"><input id="avoidIn" placeholder="Add a food to avoid" maxlength="40" autocomplete="off"><button>Add</button></form>
+  <div class="tags" id="tags"></div>
+  <div class="hint">Quick add:</div>
+  <div class="tags" id="quick"></div>
+  <span class="hint" id="avoidMsg"></span>
 </div>
 <h2>Schedule</h2>
 <p class="hint">The glasses answer "what am I supposed to be doing?" from this list, and remind 10 minutes before each item.</p>
@@ -222,19 +231,30 @@ document.getElementById('add').onsubmit = async ev => {
 };
 loadCal();
 
-// ---- foods to avoid ----
-async function loadProfile() {
-  const p = await (await fetch('/profile')).json();
-  document.getElementById('opts').innerHTML = p.options.map(o => `<label class="${p.avoid.includes(o) ? 'on' : ''}"><input type="checkbox" value="${esc(o)}" ${p.avoid.includes(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('');
+// ---- foods to avoid: free text, saved on every change ----
+let avoid = [], options = [];
+const msg = document.getElementById('avoidMsg');
+function drawAvoid() {
+  document.getElementById('tags').innerHTML = avoid.length
+    ? avoid.map(a => '<span class="tag">' + esc(a) + '<button type="button" data-rm="' + esc(a) + '" title="Remove">&times;</button></span>').join('')
+    : '<span class="hint">Nothing to avoid.</span>';
+  document.getElementById('quick').innerHTML = options.filter(o => !avoid.includes(o)).map(o => '<button type="button" class="sug" data-add="' + esc(o) + '">+ ' + esc(o) + '</button>').join('');
 }
-document.getElementById('opts').onchange = e => e.target.closest('label').classList.toggle('on', e.target.checked);
-document.getElementById('saveAvoid').onclick = async () => {
-  const msg = document.getElementById('avoidMsg');
-  const avoid = [...document.querySelectorAll('#opts input:checked')].map(i => i.value);
-  const r = await fetch('/profile', {method: 'PUT', headers: {'content-type': 'application/json'}, body: JSON.stringify({avoid})});
-  msg.textContent = r.ok ? 'Saved: ' + (avoid.join(', ') || 'nothing to avoid') : (r.status === 404 ? 'Server out of date. Restart "bun run server".' : 'Could not save.');
+async function saveAvoid(next) {
+  const r = await fetch('/profile', {method: 'PUT', headers: {'content-type': 'application/json'}, body: JSON.stringify({avoid: next})});
+  if (!r.ok) { msg.textContent = r.status === 404 ? 'Server out of date. Restart "bun run server".' : 'Could not save.'; return; }
+  const p = await r.json(); avoid = p.avoid; options = p.options; drawAvoid();
+  msg.textContent = 'Saved: ' + (avoid.join(', ') || 'nothing to avoid');
+}
+async function loadProfile() { const p = await (await fetch('/profile')).json(); avoid = p.avoid; options = p.options; drawAvoid(); }
+document.getElementById('avoidForm').onsubmit = ev => {
+  ev.preventDefault();
+  const i = document.getElementById('avoidIn'); const v = i.value.trim(); i.value = '';
+  if (v) saveAvoid([...avoid, ...v.split(',')]);
 };
-loadProfile().catch(() => { document.getElementById('avoidMsg').textContent = 'Server out of date. Restart "bun run server".'; });
+document.getElementById('tags').onclick = ev => { const x = ev.target.dataset?.rm; if (x) saveAvoid(avoid.filter(a => a !== x)); };
+document.getElementById('quick').onclick = ev => { const x = ev.target.dataset?.add; if (x) saveAvoid([...avoid, x]); };
+loadProfile().catch(() => { msg.textContent = 'Server out of date. Restart "bun run server".'; });
 </script>
 </body>
 </html>
