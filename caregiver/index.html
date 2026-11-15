@@ -7,65 +7,16 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
-<meta name="theme-color" content="#14171c">
-<style>
-  body{font-family:system-ui,sans-serif;margin:0;background:#f5f6f8;color:#14171c}
-  header{padding:16px;background:#14171c;color:#fff;display:flex;justify-content:space-between}
-  #st{font-size:12px;opacity:.7}
-  main{max-width:1040px;margin:0 auto;padding:12px}
-  .ev{background:#fff;border-left:6px solid #888;border-radius:8px;padding:12px 14px;margin:10px 0}
-  .danger{border-color:#d62839}.warn{border-color:#f0a202}.info{border-color:#3a86ff}
-  .meta{font-size:12px;color:#666}.w{font-weight:600;margin:4px 0}
-  .flag{display:inline-block;background:#eee;border-radius:10px;padding:2px 8px;font-size:12px;margin:2px 4px 0 0}
-  .empty{color:#666;text-align:center;margin-top:40px}
-  h2{font-size:15px;margin:22px 0 4px}
-  .nav{display:flex;align-items:center;gap:8px;margin:8px 0}
-  .nav b{flex:1;text-align:center}
-  .nav button{background:#fff;color:#14171c;border-color:#ccd}
-  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-  .day{background:#fff;border-radius:8px;padding:8px;min-height:120px;border:2px solid transparent}
-  .day.today{border-color:#3a86ff}
-  .dh{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px}
-  .plus{padding:0 8px;background:#fff;color:#3a86ff;border-color:#3a86ff}
-  .chip{position:relative;background:#eef3ff;border-left:4px solid #3a86ff;border-radius:6px;padding:5px 22px 5px 7px;margin:4px 0;font-size:13px}
-  .chip.wearer{background:#eefaf0;border-color:#2a9d4a}
-  .chip .t{font-weight:700}
-  .chip .x{position:absolute;top:2px;right:2px;padding:0 6px;background:transparent;color:#999;border:0;font-size:16px;line-height:1.2}
-  .none{color:#aaa;font-size:12px}
-  .allergens{background:#fff;border-radius:8px;padding:12px 14px}
-  .allergens .opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;margin:8px 0}
-  .allergens label{display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid #ccd;border-radius:6px;cursor:pointer;text-transform:capitalize}
-  .allergens label.on{background:#fdecee;border-color:#d62839;font-weight:600}
-  .legend{font-size:12px;color:#666;margin-top:6px}
-  .avoidrow{display:flex;gap:8px;padding:0;background:none;margin:8px 0}
-  .avoidrow input{flex:1}
-  .tags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
-  .tag{background:#fdecee;border:1px solid #d62839;border-radius:16px;padding:4px 6px 4px 12px;font-weight:600;display:flex;align-items:center;gap:4px}
-  .tag button{background:transparent;color:#d62839;border:0;padding:0 6px;font-size:18px;line-height:1}
-  .sug{background:#fff;color:#14171c;border:1px dashed #99a;border-radius:16px;padding:4px 12px;text-transform:capitalize}
-  @media(max-width:760px){.week{grid-template-columns:1fr}.day{min-height:0}}
-  form{background:#fff;border-radius:8px;padding:12px 14px;display:grid;gap:8px}
-  input,select,button{font:inherit;padding:8px;border:1px solid #ccd;border-radius:6px}
-  button{background:#14171c;color:#fff;cursor:pointer}
-  .del{background:#fff;color:#d62839;border-color:#d62839;padding:4px 10px}
-  .hint{font-size:12px;color:#666}
-  header{align-items:center;gap:10px}
-  header .r{display:flex;align-items:center;gap:10px}
-  #arm{background:#2d6cdf;border-color:#2d6cdf;padding:6px 12px;font-size:13px}
-  #arm.on{background:#2a9d4a;border-color:#2a9d4a}
-  #alarm{position:fixed;inset:0;background:#d62839;color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:24px;text-align:center;z-index:10;animation:flash 1s steps(2) infinite}
-  #alarm.show{display:flex}
-  #alarm h1{font-size:34px;margin:0}
-  #alarm p{font-size:22px;margin:0;max-width:520px}
-  #alarm button{background:#fff;color:#d62839;border:0;font-size:20px;padding:14px 28px;border-radius:10px;font-weight:700}
-  @keyframes flash{50%{background:#a31d2b}}
-  .ev.danger{border-width:8px}
-</style>
+<meta name="theme-color" content="#244b45">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap">
+<link rel="stylesheet" href="/theme.css">
 </head>
 <body>
 <header><b>Ally</b><span class="r"><button id="arm" type="button">Turn on alerts</button><span id="st">connecting…</span></span></header>
 <div id="alarm" role="alertdialog"><h1 id="alarmT"></h1><p id="alarmP"></p><button id="alarmX" type="button">I'm on it</button></div>
 <main>
+<p class="tagline">Independence, with peace of mind.</p>
 <h2>Alerts</h2>
 <div id="feed"><p class="empty" id="empty">No alerts. All quiet.</p></div>
 <h2>Foods to avoid</h2>

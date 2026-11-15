@@ -1,0 +1,108 @@
+/*
+ * Ally theme, taken from the Immerse the Bay slide deck: a calm off-white page, deep and sage greens, mint, and a warm
+ * amber accent bar above every title. Nunito Sans for everything (loaded from Google Fonts, falls back to the system font).
+ */
+:root {
+  --bg: #f5f9f8;        /* page */
+  --card: #ffffff;
+  --ink: #1c2b27;       /* body text */
+  --deep: #244b45;      /* headings, header bar, badges */
+  --sage: #4e7e6d;      /* primary accent */
+  --mint: #bde8df;      /* soft fill */
+  --mint-soft: #e4f2ef;
+  --line: #d3e3df;      /* card borders */
+  --amber: #f2b655;     /* the accent bar, warnings, the highlight card */
+  --amber-soft: #fdf1da;
+  --danger: #b8372b;    /* urgent only */
+  --danger-soft: #fbe6e3;
+  --dim: #5d716b;
+  --radius: 16px;
+}
+* { box-sizing: border-box; }
+body { font-family: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
+b, h1, h2 { color: var(--deep); }
+
+/* Header bar */
+header { padding: 14px 18px; background: var(--deep); color: #fff; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+header b { color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+header b::before { content: "A"; display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--amber); color: var(--deep); font-weight: 800; }
+header .r { display: flex; align-items: center; gap: 10px; }
+#st { font-size: 12px; opacity: 0.8; }
+
+main { max-width: 1040px; margin: 0 auto; padding: 8px 16px 40px; }
+.tagline { color: var(--dim); font-size: 15px; margin: 18px 0 0; }
+
+/* Section titles: the slide motif, a short amber bar above a bold title */
+h2 { font-size: 26px; font-weight: 800; margin: 34px 0 6px; letter-spacing: -0.2px; }
+h2::before { content: ""; display: block; width: 56px; height: 5px; border-radius: 3px; background: var(--amber); margin-bottom: 10px; }
+.hint { font-size: 13px; color: var(--dim); }
+
+/* Controls */
+input, select, button { font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); }
+button { background: var(--deep); color: #fff; border-color: var(--deep); cursor: pointer; font-weight: 700; }
+button:hover { filter: brightness(1.1); }
+form { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 8px; }
+#arm { background: var(--amber); color: var(--deep); border-color: var(--amber); padding: 7px 14px; font-size: 13px; }
+#arm.on { background: var(--mint); border-color: var(--mint); }
+.del { background: var(--card); color: var(--danger); border-color: var(--danger); padding: 4px 10px; }
+
+/* Alert cards */
+.ev { background: var(--card); border: 1px solid var(--line); border-left: 8px solid var(--sage); border-radius: var(--radius); padding: 14px 16px; margin: 12px 0; }
+.ev.info { border-left-color: var(--sage); }
+.ev.warn { border-left-color: var(--amber); background: var(--amber-soft); }
+.ev.danger { border-left-color: var(--danger); background: var(--danger-soft); }
+.meta { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+.w { font-weight: 800; font-size: 18px; margin: 4px 0; color: var(--deep); }
+.flag { display: inline-block; background: var(--mint-soft); border-radius: 10px; padding: 2px 8px; font-size: 12px; margin: 2px 4px 0 0; }
+.empty { color: var(--dim); text-align: center; margin: 30px 0; }
+
+/* Schedule */
+.nav { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.nav b { flex: 1; text-align: center; }
+.nav button { background: var(--card); color: var(--deep); border-color: var(--line); }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+.day { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; min-height: 120px; }
+.day.today { border: 2px solid var(--sage); background: var(--mint-soft); }
+.dh { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 6px; }
+.plus { padding: 0 9px; background: var(--card); color: var(--sage); border-color: var(--sage); }
+.chip { position: relative; background: var(--mint-soft); border-left: 4px solid var(--sage); border-radius: 8px; padding: 6px 24px 6px 8px; margin: 5px 0; font-size: 13px; }
+.chip.wearer { background: var(--amber-soft); border-left-color: var(--amber); }
+.chip .t { font-weight: 800; color: var(--deep); }
+.chip .x { position: absolute; top: 2px; right: 2px; padding: 0 6px; background: transparent; color: var(--dim); border: 0; font-size: 16px; line-height: 1.2; }
+.none { color: var(--dim); font-size: 12px; }
+.legend { font-size: 12px; color: var(--dim); margin-top: 8px; }
+@media (max-width: 760px) { .week { grid-template-columns: 1fr; } .day { min-height: 0; } }
+
+/* Foods to avoid */
+.allergens { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+.avoidrow { display: flex; gap: 8px; padding: 0; background: none; border: 0; margin: 10px 0; }
+.avoidrow input { flex: 1; }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.tag { background: var(--deep); color: #fff; border-radius: 20px; padding: 5px 6px 5px 14px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+.tag button { background: transparent; color: #fff; border: 0; padding: 0 8px; font-size: 18px; line-height: 1; }
+.sug { background: var(--card); color: var(--deep); border: 1px dashed var(--sage); border-radius: 20px; padding: 5px 14px; text-transform: capitalize; font-weight: 600; }
+
+/* Full-screen alarm (urgent, so it keeps a strong red) */
+#alarm { position: fixed; inset: 0; background: var(--danger); color: #fff; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; text-align: center; z-index: 10; animation: flash 1s steps(2) infinite; }
+#alarm.show { display: flex; }
+#alarm h1 { font-size: 38px; margin: 0; color: #fff; }
+#alarm p { font-size: 22px; margin: 0; max-width: 520px; }
+#alarm button { background: #fff; color: var(--danger); border: 0; font-size: 20px; padding: 14px 28px; border-radius: 12px; font-weight: 800; }
+@keyframes flash { 50% { background: #8f2a21; } }
+
+/* Demo chat */
+.chatlog { flex: 1; overflow-y: auto; padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; max-width: 820px; width: 100%; margin: 0 auto; }
+.row { display: flex; flex-direction: column; max-width: 82%; }
+.row.you { align-self: flex-end; align-items: flex-end; }
+.row.guard { align-self: flex-start; align-items: flex-start; }
+.who { font-size: 12px; color: var(--dim); margin: 0 8px 4px; letter-spacing: 0.04em; }
+.bubble { padding: 14px 20px; border-radius: 20px; font-size: 24px; line-height: 1.35; }
+.you .bubble { background: var(--sage); color: #fff; border-bottom-right-radius: 5px; }
+.guard .bubble { background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 5px; color: var(--deep); font-weight: 600; }
+body.chat { height: 100vh; display: flex; flex-direction: column; }
+body.chat #empty { color: var(--dim); text-align: center; margin-top: 28vh; font-size: 20px; }
+body.chat header button { background: rgba(255, 255, 255, 0.15); border-color: transparent; }
+
+/* Debug */
+img { max-width: 100%; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+pre { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; overflow: auto; font-size: 13px; white-space: pre-wrap; }
