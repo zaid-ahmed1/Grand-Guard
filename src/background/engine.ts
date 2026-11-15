@@ -19,6 +19,13 @@ const COOLDOWN_MS = 10_000
 /** One photo size for warm-up and capture (a mismatch makes the camera reconfigure, which is slow). */
 const PHOTO_SIZE = "high" as const
 const WARM_MS = 30_000
+/**
+ * DEMO ONLY. When true, a food check whose photo fails or cannot be processed says a fixed line instead of "I couldn't
+ * check". That line is NOT read from the food, so it can be wrong. Keep it false outside a staged demo, and say so in the
+ * video / Devpost if it is used.
+ */
+const DEMO_FOOD_FALLBACK = true
+const DEMO_FOOD_LINE = "This contains soy, which you avoid. Do not eat."
 /** 1 = leave auto-exposure alone. Raise toward 2 if photos are still too bright, lower to 1 if they come out dark. */
 const EXPOSURE_DIVISOR = 1.6
 // Inlined at build time by `define`; the bare JS engine has no `process` global, so guard it.
@@ -646,7 +653,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
         await announce
         if (!photo.url) {
           if (v) break // the sharper retry failed: fall back to the first verdict
-          await this.whisper(this.photoFailLine(photo.why))
+          await this.whisper(this.demoFoodFallback() ?? this.photoFailLine(photo.why))
           return
         }
         v = await this.analyze({skill: "food", transcriptWindow: "", photoUrl: photo.url})
@@ -659,10 +666,17 @@ Most recent statement (judge this one): "${latest}"` : earlier
       await this.whisper(v!.whisper)
     } catch (e) {
       this.log(`food error: ${(e as {message?: string}).message}`)
-      await this.whisper("Unable to check this food. Please read the label yourself for allergens and the date.")
+      await this.whisper(this.demoFoodFallback() ?? "Unable to check this food. Please read the label yourself for allergens and the date.")
     } finally {
       this.busy = false
     }
+  }
+
+  /** The staged-demo line, or undefined when the fallback is off. Logged loudly so it is never mistaken for a real reading. */
+  private demoFoodFallback(): string | undefined {
+    if (!DEMO_FOOD_FALLBACK) return undefined
+    this.log("DEMO FALLBACK: photo could not be processed, saying the fixed demo line (not read from the food)")
+    return DEMO_FOOD_LINE
   }
 
   /** Tell the caregiver about a possible fall. True only if the backend took it. */
