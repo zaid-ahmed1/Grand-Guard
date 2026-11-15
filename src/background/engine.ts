@@ -14,6 +14,9 @@ type Session = MiniappSession<Channels>
 
 const WINDOW_MS = 60_000
 const COOLDOWN_MS = 10_000
+/** One photo size for warm-up and capture (a mismatch makes the camera reconfigure, which is slow). */
+const PHOTO_SIZE = "high" as const
+const WARM_MS = 30_000
 // Inlined at build time by `define`; the bare JS engine has no `process` global, so guard it.
 const DEFAULT_BACKEND: string = typeof process !== "undefined" ? (process.env.MENTRA_PUBLIC_BACKEND_URL ?? "") : ""
 
@@ -71,6 +74,10 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export class Engine {
   private window: {at: number; text: string}[] = []
   private busy = false
+  /** Camera warm-up state. A cold camera was the cause of 25 s photo timeouts, so it is warmed as soon as the wearer speaks to us. */
+  private warming: Promise<void> | null = null
+  private warmUntil = 0
+  private capturing = false
   private wake = DEFAULT_WAKE
   private awaitUntil = 0
   /** Our own speech can be picked up by the mic; ignore transcripts while speaking and just after. */
@@ -165,6 +172,7 @@ export class Engine {
         if (w.rest) request = w.rest
         else {
           this.awaitUntil = now + AWAIT_MS
+          this.warmCamera()
           this.log("wake word heard, listening")
           void this.whisper("Listening.")
           return
@@ -172,6 +180,7 @@ export class Engine {
       }
     }
     if (request !== null) {
+      this.warmCamera()
       this.chat("you", request)
       void this.ask(request)
       return
@@ -189,6 +198,7 @@ export class Engine {
     // STT spells out acronyms ("i r s"), so match against a normalised copy.
     const norm = normalizeTranscript(text)
     if (FOOD_COMMAND.test(norm)) {
+      this.warmCamera()
       this.chat("you", text)
       void this.runFood()
       return
@@ -390,33 +400,62 @@ Most recent statement (judge this one): "${latest}"` : earlier
    * The glasses allow one photo job at a time, so this NEVER starts a second photo while one may be in flight:
    * on "busy / another job in progress" it waits and retries the same request; on any other failure it stops.
    */
+  /**
+   * Wake the glasses camera before it is needed, so the photo itself is quick. Called when the wearer addresses us
+   * (wake word) or says a food command, never otherwise. The camera is only held ready for 30 s, and warm-up must
+   * use the same size as the capture or it is wasted.
+   */
+  private warmCamera() {
+    if (this.capturing || this.warming || Date.now() < this.warmUntil - 8000) return
+    this.warmUntil = Date.now() + WARM_MS
+    const t = Date.now()
+    this.warming = this.session.camera
+      .warmUp({size: PHOTO_SIZE, durationMs: WARM_MS})
+      .then(() => this.log(`camera warm in ${Date.now() - t} ms`))
+      .catch((e) => {
+        this.warmUntil = 0
+        this.log(`camera warm-up skipped: ${(e as {message?: string}).message}`)
+      })
+      .finally(() => {
+        this.warming = null
+      })
+  }
+
   private async capturePhoto(
     t0: number,
-    size: "medium" | "high" | "max" = "medium",
+    size: "medium" | "high" | "max" = PHOTO_SIZE,
     direct = true,
   ): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try {
-        const r = await this.session.camera.takePhoto({
-          size,
-          compress: "medium",
-          sound: false,
-          timeoutMs: 25_000,
-          // Direct Wi-Fi upload only: the slow Bluetooth relay is what left photo jobs stuck.
-          transferMethod: direct ? "direct" : "auto",
-        })
-        this.log(`photo ready (${size}/${direct ? "direct" : "auto"}) at +${Date.now() - t0} ms`)
-        return {url: r.photoUrl}
-      } catch (e) {
-        const msg = (e as {message?: string}).message ?? String(e)
-        this.log(`photo failed (try ${attempt}): ${msg}`)
-        if (!/busy|in progress/i.test(msg)) return {why: "failed"}
-        why = "busy"
-        await new Promise((res) => setTimeout(res, 3000))
+    // Let a warm-up in progress finish first (at most 6 s), so the two never collide on the camera.
+    if (this.warming) await Promise.race([this.warming, new Promise((res) => setTimeout(res, 6000))])
+    this.capturing = true
+    try {
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          const r = await this.session.camera.takePhoto({
+            size,
+            compress: "medium",
+            sound: false,
+            timeoutMs: 15_000,
+            // Direct Wi-Fi upload only: the slow Bluetooth relay is what left photo jobs stuck.
+            transferMethod: direct ? "direct" : "auto",
+          })
+          this.log(`photo ready (${size}/${direct ? "direct" : "auto"}) at +${Date.now() - t0} ms`)
+          this.warmUntil = Date.now() + WARM_MS
+          return {url: r.photoUrl}
+        } catch (e) {
+          const msg = (e as {message?: string}).message ?? String(e)
+          this.log(`photo failed (try ${attempt}): ${msg}`)
+          if (!/busy|in progress/i.test(msg)) return {why: "failed"}
+          why = "busy"
+          await new Promise((res) => setTimeout(res, 3000))
+        }
       }
-    }
     return {why}
+    } finally {
+      this.capturing = false
+    }
   }
 
   private photoFailLine(why?: "busy" | "failed") {
@@ -465,11 +504,11 @@ Most recent statement (judge this one): "${latest}"` : earlier
         const announce = this.whisper(pass === 1 ? "Checking this food. Taking a photo now." : "Taking a photo now.")
         // Medium over direct Wi-Fi first; the retake (label unreadable) is high. If direct Wi-Fi fails, one more
         // try over the automatic route at medium.
-        let photo = await this.capturePhoto(t0, pass === 1 ? "medium" : "high")
+        let photo = await this.capturePhoto(t0)
         if (!photo.url && photo.why === "failed") {
           this.log("direct upload failed, retrying over the automatic route")
           await new Promise((res) => setTimeout(res, 3000))
-          photo = await this.capturePhoto(t0, "medium", false)
+          photo = await this.capturePhoto(t0, PHOTO_SIZE, false)
         }
         await announce
         if (!photo.url) {
