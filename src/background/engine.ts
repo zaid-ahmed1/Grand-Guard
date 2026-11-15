@@ -148,8 +148,8 @@ export class Engine {
       const pending = this.pendingAdd
       this.pendingAdd = null
       if (now < pending.until) {
-        if (YES.test(reply)) return void this.confirmAdd(pending.event)
-        if (NO.test(reply)) return void this.whisper("Okay. It was not added.")
+        if (YES.test(reply)) return void (this.chat("you", text), this.confirmAdd(pending.event))
+        if (NO.test(reply)) return void (this.chat("you", text), this.whisper("Okay. It was not added."))
       }
     }
 
@@ -172,15 +172,16 @@ export class Engine {
       }
     }
     if (request !== null) {
+      this.chat("you", request)
       void this.ask(request)
       return
     }
 
     // Calendar and clock questions: direct phrases, answered without any wake word.
     const direct = normalizeTranscript(text)
-    if (CALENDAR_COMMAND.test(direct)) return void this.runCalendar()
-    if (CLOCK_COMMAND.test(direct)) return void this.runClock()
-    if (CALENDAR_LOOSE.test(direct) || FOOD_LOOSE.test(direct)) return void this.routeRequest(text, false)
+    if (CALENDAR_COMMAND.test(direct)) return void (this.chat("you", text), this.runCalendar())
+    if (CLOCK_COMMAND.test(direct)) return void (this.chat("you", text), this.runClock())
+    if (CALENDAR_LOOSE.test(direct) || FOOD_LOOSE.test(direct)) return void (this.chat("you", text), this.routeRequest(text, false))
 
     this.window.push({at: now, text})
     this.window = this.window.filter((w) => now - w.at <= WINDOW_MS)
@@ -188,12 +189,14 @@ export class Engine {
     // STT spells out acronyms ("i r s"), so match against a normalised copy.
     const norm = normalizeTranscript(text)
     if (FOOD_COMMAND.test(norm)) {
+      this.chat("you", text)
       void this.runFood()
       return
     }
     const command = SCAM_COMMAND.test(norm)
     const trigger = SCAM_TRIGGERS.find((re) => re.test(norm))
     if (!command && !trigger && !forced) return
+    this.chat("you", text)
     void this.run(command ? "voice command" : `phrase ${trigger ?? "simulated"}`, command || forced, text)
   }
 
@@ -501,7 +504,18 @@ Most recent statement (judge this one): "${latest}"` : earlier
     return (await r.json()) as Verdict
   }
 
+  /** Demo chat: what the wearer said (only the words it acted on) and what it whispered. Fire and forget. */
+  private chat(role: "you" | "guard", text: string) {
+    if (!this.backendUrl || !text.trim()) return
+    void fetch(`${this.backendUrl}/chat`, {
+      method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({role, text}),
+    }).catch(() => {})
+  }
+
   private async whisper(text: string) {
+    this.chat("guard", text)
     this.speaking = true
     try {
       await this.session.speaker.speak(text, {

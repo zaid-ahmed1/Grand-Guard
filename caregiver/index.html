@@ -84,7 +84,7 @@ function add(e, top = true) {
   d.id = 'ev-' + e.id;
   d.className = 'ev ' + e.severity;
   d.innerHTML = `<div class="meta">${new Date(e.at).toLocaleTimeString()} · ${esc(e.skill)} · ${esc(e.severity)}</div>
-    <div class="w">“${esc(e.whisper)}”</div><div>${esc(e.summary)}</div>
+    ${e.whisper ? `<div class="w">“${esc(e.whisper)}”</div>` : ''}<div>${esc(e.summary)}</div>
     ${(e.evidence || []).map(x => `<span class="flag">${esc(x.detail)}</span>`).join('')}`;
   if (old) { old.replaceWith(d); return; }
   top ? feed.prepend(d) : feed.append(d);

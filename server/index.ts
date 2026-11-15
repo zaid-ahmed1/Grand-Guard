@@ -15,6 +15,9 @@ const cors = {"access-control-allow-origin": "*", "access-control-allow-headers"
 const json = (o: unknown, status = 200) =>
   new Response(JSON.stringify(o), {status, headers: {"content-type": "application/json", ...cors}})
 
+const chat: {id: number; at: number; role: "you" | "guard"; text: string}[] = []
+let chatId = 0
+
 const rank = {info: 0, warn: 1, danger: 2} as const
 
 function broadcast(ev: CaregiverEvent) {
@@ -35,7 +38,7 @@ function publish(v: Verdict, refines?: string): string {
   if (existing) {
     if (rank[v.severity] >= rank[existing.severity]) {
       existing.severity = v.severity
-      existing.whisper = v.whisper
+      existing.whisper = v.skill === "food" ? "" : v.whisper
     }
     existing.summary = v.caregiverSummary ?? existing.summary
     existing.evidence = v.evidence ?? existing.evidence
@@ -47,9 +50,10 @@ function publish(v: Verdict, refines?: string): string {
     at: Date.now(),
     skill: v.skill,
     severity: v.severity,
-    whisper: v.whisper,
+    // Food events carry only the short summary, never the spoken label details.
+    whisper: v.skill === "food" ? "" : v.whisper,
     summary: v.caregiverSummary,
-    evidence: v.evidence,
+    evidence: v.skill === "food" ? undefined : v.evidence,
   }
   events.unshift(ev)
   events.length = Math.min(events.length, 200)
@@ -90,6 +94,27 @@ Bun.serve({
       if (url.pathname === "/debug/last") return json(l ? {at: l.at, skill: l.skill, note: l.note} : {})
       if (url.pathname === "/debug/photo" && l) return new Response(Buffer.from(l.data, "base64"), {headers: {"content-type": l.type, "cache-control": "no-store"}})
       return new Response("not found", {status: 404})
+    }
+    // Demo chat: the phone posts what the wearer said and what Grand Guard whispered. Held in memory only, and only
+    // the laptop may read it (the public tunnel can post lines but never see them). CHAT_FEED=0 turns it off.
+    if (url.pathname === "/chat" && req.method === "POST") {
+      if (process.env.CHAT_FEED === "0") return json({ok: false})
+      const b = (await req.json()) as {role?: string; text?: string}
+      if ((b.role === "you" || b.role === "guard") && typeof b.text === "string" && b.text.trim()) {
+        chat.push({id: ++chatId, at: Date.now(), role: b.role, text: b.text.trim().slice(0, 600)})
+        if (chat.length > 300) chat.splice(0, chat.length - 300)
+      }
+      return json({ok: true})
+    }
+    if (url.pathname === "/chat" && req.method === "GET") {
+      if (!isLocalRequest(req)) return new Response("not found", {status: 404})
+      const since = Number(url.searchParams.get("since") ?? 0)
+      return json(chat.filter((m) => m.id > since))
+    }
+    if (url.pathname === "/chat" && req.method === "DELETE") {
+      if (!isLocalRequest(req)) return new Response("not found", {status: 404})
+      chat.length = 0
+      return json({ok: true})
     }
     if (url.pathname === "/profile" && req.method === "GET") return json({avoid: PROFILE.avoid, options: ALLERGEN_OPTIONS()})
     if (url.pathname === "/profile" && req.method === "PUT") {

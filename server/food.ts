@@ -140,7 +140,8 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     ...base,
     severity,
     whisper: `${body} ${advice}`,
-    caregiverSummary: severity === "info" ? "Food check: no concerns found." : `Food check${label.productName ? ` (${label.productName})` : ""}: ${issues}.`,
+    // The caregiver gets the gist only: what was asked about and what the wearer was told, not the label details.
+    caregiverSummary: `Asked about ${known || "a food"}. Responded: ${severity === "danger" ? "do not eat this" : severity === "warn" ? "check the label" : "no concerns found"}.`,
     evidence,
     needsCaregiver: severity === "danger",
     unreadable,
