@@ -50,10 +50,14 @@ export class FallGuard {
     return this.asking
   }
 
-  /** Begin the check-in. Ignored if one is running or one ended less than a minute ago. */
+  /**
+   * Begin the check-in. Ignored while one is already open. The wearer saying they fell always starts one; only the
+   * sensor is held back for a minute after a check-in (so one tumble cannot start it repeatedly).
+   */
   async start(reason: string) {
     const now = Date.now()
-    if (this.asking || now - this.lastStart < COOLDOWN_MS) return
+    if (this.asking) return void this.h.log(`fall check-in already open, ignoring (${reason})`)
+    if (reason !== "said" && now - this.lastStart < COOLDOWN_MS) return void this.h.log(`fall sensor ignored (cooldown): ${reason}`)
     this.lastStart = now
     this.asking = true
     this.h.log(`fall check-in (${reason})`)
