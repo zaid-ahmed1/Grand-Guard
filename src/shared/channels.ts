@@ -16,12 +16,14 @@ export interface Channels {
   "engine:setWake": {phrase: string}
   "engine:simNoise": Record<string, never>
   "engine:setNoise": {on: boolean}
+  "engine:setPaused": {paused: boolean}
 
   // background → WebView
   "engine:backend": {url: string}
   "engine:voice": VoiceConfig
   "engine:wake": {phrase: string}
   "engine:noise": {on: boolean}
+  "engine:paused": {paused: boolean}
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
   /** Loudness of the microphone in dB (0 is the loudest). Levels only, never audio. `status` carries a message instead. */

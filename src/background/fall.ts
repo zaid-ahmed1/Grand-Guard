@@ -53,6 +53,16 @@ export class FallGuard {
     this.timer = setTimeout(() => void this.finish("no response"), noise ? ASK_NOISE_MS : ASK_MS)
   }
 
+  /** Drop an open check-in without alerting anyone (used when the helper pauses listening). */
+  cancel() {
+    if (!this.asking) return
+    this.asking = false
+    if (this.timer) clearTimeout(this.timer)
+    if (this.reask) clearTimeout(this.reask)
+    this.timer = this.reask = null
+    this.h.log("fall check-in cancelled (listening paused)")
+  }
+
   /** While a check-in is open, every utterance is an answer to it. Returns true if the text was consumed. */
   hear(norm: string): boolean {
     if (!this.asking) return false

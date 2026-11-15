@@ -320,6 +320,7 @@ Face recognition; ambient or periodic photo-taking (the camera only runs when as
 ## 14. Change log
 
 **Fall check-in (Sat Nov 14, late)**
+- **Pause listening:** a large button at the top of the miniapp stops listening for a demo talk-over. Paused really stops: speech recognition is unsubscribed, the loud-noise trigger is switched off, reminders stay quiet, and the rolling transcript is dropped. It is not remembered across restarts.
 - Fall check-in is built, started by the wearer's voice only. The accelerometer detection path, its Fall sensor panel and the IMU manifest requirement were removed because the sensor is not available to miniapps on Mentra Live.
 
 **v0.2 (Sat Nov 14)**

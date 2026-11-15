@@ -149,15 +149,12 @@ export class Engine {
       this.session.ui.send("engine:backend", {url: this.backendUrl})
       this.session.ui.send("engine:voice", this.voice)
       this.session.ui.send("engine:noise", {on: this.noiseOff !== null})
+      this.session.ui.send("engine:paused", {paused: this.paused})
     })
 
     // Local-only STT: audio never leaves the phone, only text goes to the backend.
-    this.session.transcription.on((d) => {
-      this.lastHeardAt = Date.now()
-      this.session.ui.send("p0:transcript", {text: d.text, isFinal: d.isFinal, source: d.source, latencyMs: 0})
-      if (d.isFinal) this.ingest(d.text, false)
-    }, {processing: "localOnly"})
-    this.log("engine listening (localOnly STT)")
+    this.listen()
+    this.session.ui.on("engine:setPaused", ({paused}) => this.setPaused(paused))
     setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
 
     // Loud-noise trigger for the fall check-in. OFF until the wearer's helper switches it on in the miniapp, and off again
@@ -167,6 +164,42 @@ export class Engine {
   }
 
   private noiseOff: (() => void) | null = null
+  private stopTranscription: (() => void) | null = null
+  private paused = false
+
+  /** Start speech-to-text. Audio stays on the phone; only recognised text is used. */
+  private listen() {
+    this.stopTranscription = this.session.transcription.on((d) => {
+      this.lastHeardAt = Date.now()
+      this.session.ui.send("p0:transcript", {text: d.text, isFinal: d.isFinal, source: d.source, latencyMs: 0})
+      if (d.isFinal) this.ingest(d.text, false)
+    }, {processing: "localOnly"})
+    this.log("engine listening (localOnly STT)")
+  }
+
+  /**
+   * Pause or resume listening, for when the team is talking over the demo. Paused really stops: speech recognition is
+   * unsubscribed, the loud-noise trigger is switched off, reminders stay quiet, and anything pending is dropped.
+   * It is not remembered across restarts (Ally always starts listening).
+   */
+  private setPaused(paused: boolean) {
+    if (paused === this.paused) return
+    this.paused = paused
+    if (paused) {
+      this.stopTranscription?.()
+      this.stopTranscription = null
+      this.setNoise(false)
+      this.fall.cancel()
+      this.window = []
+      this.pendingAdd = null
+      this.awaitUntil = 0
+      this.log("PAUSED: not listening")
+    } else {
+      this.listen()
+      this.log("RESUMED: listening")
+    }
+    this.session.ui.send("engine:paused", {paused})
+  }
 
   /** Switch the loud-noise trigger on or off. Off means the microphone levels are not even subscribed to. */
   private setNoise(on: boolean) {
@@ -466,7 +499,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
   /** Ambient: a reminder shortly before an event. Skipped while anyone is talking or the glasses are busy. */
   private async checkReminders() {
     const now = Date.now()
-    if (!this.backendUrl || this.busy || this.speaking || this.awaitUntil > now) return
+    if (this.paused || !this.backendUrl || this.busy || this.speaking || this.awaitUntil > now) return
     if (now - this.lastHeardAt < QUIET_BEFORE_REMINDER_MS) return
     try {
       const v = await this.analyze({skill: "calendar", transcriptWindow: "", localNow: this.localNow(), query: "remind"})

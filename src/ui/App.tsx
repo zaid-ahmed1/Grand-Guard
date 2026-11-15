@@ -20,6 +20,7 @@ export function App(): React.JSX.Element {
   const [photo, setPhoto] = useState<Photo | null>(null)
   const [size, setSize] = useState<PhotoSize>("low")
   const [compress, setCompress] = useState<PhotoCompress>("medium")
+  const [paused, setPaused] = useState(false)
   const [say, setSay] = useState("This looks like a scam. Don't pay or give any codes.")
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function App(): React.JSX.Element {
       }),
       mentra.on("p0:photoResult", setPhoto),
       mentra.on("engine:backend", ({url}) => setBackend(url)),
+      mentra.on("engine:paused", ({paused}) => setPaused(paused)),
       mentra.on("engine:wake", ({phrase}) => setWake(phrase)),
       mentra.on("engine:voice", (v) => {
         setVoiceMode(v.processing)
@@ -49,6 +51,13 @@ export function App(): React.JSX.Element {
   return (
     <div className="app">
       <h1>Ally (debug)</h1>
+      <button
+        type="button"
+        onClick={() => mentra.send("engine:setPaused", {paused: !paused})}
+        style={{width: "100%", padding: "18px 12px", fontSize: 20, fontWeight: 800, border: 0, borderRadius: 12, color: "#fff", background: paused ? "#b8372b" : "#244b45"}}
+      >
+        {paused ? "PAUSED. Tap to resume listening" : "Listening. Tap to pause"}
+      </button>
 
       <h2>Engine</h2>
       <input value={backend} placeholder="http://<laptop-LAN-IP>:8787" onChange={(e) => setBackend(e.target.value)} style={{width: "100%"}} />
