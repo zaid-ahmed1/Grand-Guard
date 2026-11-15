@@ -148,6 +148,7 @@ export class Engine {
       this.session.ui.send("engine:wake", {phrase: this.wake})
       this.session.ui.send("engine:backend", {url: this.backendUrl})
       this.session.ui.send("engine:voice", this.voice)
+      this.session.ui.send("engine:noise", {on: this.noiseOff !== null})
     })
 
     // Local-only STT: audio never leaves the phone, only text goes to the backend.
@@ -159,19 +160,45 @@ export class Engine {
     this.log("engine listening (localOnly STT)")
     setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
 
-    // Loud-noise trigger for the fall check-in: loudness only, nothing is kept or sent. A noise only asks "Are you okay?".
+    // Loud-noise trigger for the fall check-in. OFF until the wearer's helper switches it on in the miniapp, and off again
+    // after every restart (it is experimental). It measures loudness only; nothing is kept or sent.
+    this.session.ui.on("engine:setNoise", ({on}) => this.setNoise(on))
+    this.session.ui.on("engine:simNoise", () => void this.fall.start("loud noise"))
+  }
+
+  private noiseOff: (() => void) | null = null
+
+  /** Switch the loud-noise trigger on or off. Off means the microphone levels are not even subscribed to. */
+  private setNoise(on: boolean) {
+    if (on === (this.noiseOff !== null)) return
+    if (!on) {
+      this.noiseOff?.()
+      this.noiseOff = null
+      this.log("loud-noise trigger OFF")
+      this.session.ui.send("engine:noise", {on: false})
+      this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: "Off"})
+      return
+    }
+    this.loud = new LoudnessWatcher() // restarts the 15 s room calibration
+    this.lastLevelSent = 0
+    this.loudNoteLogged = false
+    this.calLogged = false
     try {
-      this.session.mic.onAudioChunk((c) => this.onAudio(c.data, c.format))
-      this.session.ui.on("engine:simNoise", () => void this.fall.start("loud noise"))
-      setTimeout(() => {
-        if (this.loud.chunks === 0) {
-          this.log("no microphone audio chunks received; the loud-noise trigger is unavailable (say \"I've fallen\" instead)")
-          this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: "No audio received. The loud-noise trigger is unavailable."})
-        }
-      }, 12_000)
+      this.noiseOff = this.session.mic.onAudioChunk((c) => this.onAudio(c.data, c.format))
     } catch (e) {
       this.log(`microphone levels unavailable: ${(e as {message?: string}).message}`)
+      this.session.ui.send("engine:noise", {on: false})
+      this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: "Could not start: microphone levels unavailable."})
+      return
     }
+    this.log("loud-noise trigger ON (learning the room for 15 s)")
+    this.session.ui.send("engine:noise", {on: true})
+    setTimeout(() => {
+      if (this.noiseOff && this.loud.chunks === 0) {
+        this.log("no microphone audio chunks received; the loud-noise trigger is unavailable (say \"I've fallen\" instead)")
+        this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: "No audio received. The loud-noise trigger is unavailable."})
+      }
+    }, 12_000)
   }
 
   /** One chunk of microphone audio: reduce it to a loudness reading, drop the audio, and maybe start a check-in. */
