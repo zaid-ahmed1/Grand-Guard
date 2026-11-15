@@ -2,6 +2,7 @@ import type React from "react"
 import {useEffect, useState} from "react"
 import type {PhotoCompress, PhotoSize, Processing} from "../shared/channels"
 import {DEFAULT_WAKE, wakeIssue} from "../shared/wake"
+import {NoiseMeter} from "./NoiseMeter"
 
 type Photo = {url: string; mimeType: string; bytes: number; latencyMs: number; size: string; compress: string}
 
@@ -98,6 +99,8 @@ export function App(): React.JSX.Element {
           Speak ({processing})
         </button>
       ))}
+
+      <NoiseMeter />
 
       <h2>Log</h2>
       <pre style={{fontSize: 11, whiteSpace: "pre-wrap"}}>{logs.join("\n")}</pre>

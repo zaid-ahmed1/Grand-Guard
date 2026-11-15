@@ -1,0 +1,38 @@
+import type React from "react"
+import {useEffect, useRef, useState} from "react"
+import {PEAK_DB} from "../background/loudness"
+
+/** Live loudness meter for tuning the loud-noise trigger. Shows levels only, never audio. */
+export function NoiseMeter(): React.JSX.Element {
+  const [lvl, setLvl] = useState<{rmsDb: number; peakDb: number; roomDb: number} | null>(null)
+  const [status, setStatus] = useState("Waiting for audio…")
+  const hold = useRef(-90)
+
+  useEffect(() => {
+    const off = mentra.on("p0:level", (l) => {
+      if (l.status) return setStatus(l.status)
+      setStatus("Measuring")
+      hold.current = Math.max(l.peakDb, hold.current - 1.5)
+      setLvl({rmsDb: l.rmsDb, peakDb: l.peakDb, roomDb: l.roomDb})
+    })
+    return () => off()
+  }, [])
+
+  const pct = (d: number) => `${Math.max(0, Math.min(100, ((d + 60) / 60) * 100))}%`
+  return (
+    <div>
+      <h2>Loud noise</h2>
+      <p><b>{status}</b></p>
+      <div style={{position: "relative", height: 22, background: "#e4f2ef", borderRadius: 6, overflow: "hidden"}}>
+        <div style={{position: "absolute", inset: 0, width: pct(lvl?.peakDb ?? -90), background: "#4e7e6d"}} />
+        <div style={{position: "absolute", top: 0, bottom: 0, left: pct(PEAK_DB), width: 3, background: "#b8372b"}} title="trigger level" />
+      </div>
+      {lvl && (
+        <p style={{fontFamily: "monospace", fontSize: 12}}>
+          peak {lvl.peakDb.toFixed(0)} dB · average {lvl.rmsDb.toFixed(0)} dB · room {lvl.roomDb.toFixed(0)} dB · trigger at peak above {PEAK_DB} dB (red line)
+        </p>
+      )}
+      <button type="button" onClick={() => mentra.send("engine:simNoise", {})}>Simulate loud noise (starts a real check-in)</button>
+    </div>
+  )
+}

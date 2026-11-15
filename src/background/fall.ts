@@ -14,19 +14,24 @@ export const FALL_PHRASE =
 const HELP = /\b(help|hurt|pain|ambulance|not (ok|okay|fine|alright)|can'?t (get up|move|stand))\b|^(no|nope|nah)\b/
 const OK = /\b(i'?m|i am|im) (ok|okay|fine|alright|all right|good|not hurt)\b|\bfalse alarm\b|\bno need\b|^(yes|yeah|yep|ok|okay|fine)\b/
 
+/** Said it themselves: 15 s. Started by a noise: they may not have fallen, so allow longer and ask twice. */
 const ASK_MS = 15_000
+const ASK_NOISE_MS = 25_000
+const REASK_NOISE_MS = 10_000
 
 export type FallHooks = {
   /** Speak a line and resolve when it has finished. */
   say: (text: string) => Promise<void>
   /** Tell the caregiver. Resolves true only if the backend accepted it. */
-  alert: (reason: string) => Promise<boolean>
+  alert: (reason: string, trigger: string) => Promise<boolean>
   log: (msg: string) => void
 }
 
 export class FallGuard {
   private asking = false
   private timer: ReturnType<typeof setTimeout> | null = null
+  private reask: ReturnType<typeof setTimeout> | null = null
+  private trigger = "said"
 
   constructor(private h: FallHooks) {}
 
@@ -38,11 +43,14 @@ export class FallGuard {
   async start(reason: string) {
     if (this.asking) return void this.h.log(`fall check-in already open, ignoring (${reason})`)
     this.asking = true
+    this.trigger = reason
     this.h.log(`fall check-in (${reason})`)
     await this.h.say("Are you okay? Say I'm okay, or say help.")
     // The wearer may have answered while the question was still being spoken.
     if (!this.asking) return
-    this.timer = setTimeout(() => void this.finish("no response"), ASK_MS)
+    const noise = reason === "loud noise"
+    if (noise) this.reask = setTimeout(() => void this.h.say("Are you okay? Please say I'm okay, or say help."), REASK_NOISE_MS)
+    this.timer = setTimeout(() => void this.finish("no response"), noise ? ASK_NOISE_MS : ASK_MS)
   }
 
   /** While a check-in is open, every utterance is an answer to it. Returns true if the text was consumed. */
@@ -57,12 +65,13 @@ export class FallGuard {
     if (!this.asking) return
     this.asking = false
     if (this.timer) clearTimeout(this.timer)
-    this.timer = null
+    if (this.reask) clearTimeout(this.reask)
+    this.timer = this.reask = null
     if (outcome === "ok") {
       this.h.log("fall check-in: wearer is okay")
       return void (await this.h.say("Glad you're okay."))
     }
-    const sent = await this.h.alert(outcome)
+    const sent = await this.h.alert(outcome, this.trigger)
     this.h.log(`fall check-in: ${outcome}, family ${sent ? "notified" : "NOT reached"}`)
     await this.h.say(
       sent

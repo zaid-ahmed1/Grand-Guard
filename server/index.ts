@@ -19,12 +19,14 @@ const chat: {id: number; at: number; role: "you" | "guard"; text: string}[] = []
 let chatId = 0
 
 /** A possible fall, decided by code on the glasses side: the wearer said so, asked for help, or did not answer a check-in. */
-function fallVerdict(reason: string): Verdict {
+function fallVerdict(reason: string, trigger?: string): Verdict {
+  // A noise-started check-in is less certain than the wearer saying they fell, and the caregiver should know that.
+  const noise = trigger === "loud noise" ? " This started from a loud noise, not from the wearer saying they fell." : ""
   return {
     skill: "fall",
     severity: "danger",
     whisper: "",
-    caregiverSummary: `Possible fall. ${reason === "asked for help" ? "The wearer asked for help." : "The wearer did not respond to a check-in."} Please check on them now.`,
+    caregiverSummary: `Possible fall. ${reason === "asked for help" ? "The wearer asked for help." : "The wearer did not respond to a check-in."} Please check on them now.${noise}`,
     needsCaregiver: true,
     source: "code",
   }
@@ -86,7 +88,7 @@ Bun.serve({
       const body = (await req.json()) as AnalyzeRequest
       if (!["scam", "food", "ask", "calendar", "route", "fall"].includes(body.skill)) return json({error: `unknown skill ${body.skill}`}, 400)
       const verdict: Verdict =
-        body.skill === "fall" ? fallVerdict(body.transcriptWindow)
+        body.skill === "fall" ? fallVerdict(...(body.transcriptWindow.split("|") as [string, string?]))
         : body.skill === "food" ? await analyzeFood(body)
         : body.skill === "ask" ? await analyzeAsk(body)
         : body.skill === "calendar" ? calendarVerdict(body.query ?? "now", body.localNow)

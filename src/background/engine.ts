@@ -7,6 +7,7 @@ import type {MiniappSession} from "@mentra/miniapp/background"
 import type {AnalyzeRequest, CalendarEvent, Verdict} from "../shared/types"
 import type {Channels} from "../shared/channels"
 import {FALL_PHRASE, FallGuard} from "./fall"
+import {LoudnessWatcher} from "./loudness"
 import {normalizeTranscript} from "../shared/text"
 import {DEFAULT_VOICE, speakOptions, type VoiceConfig} from "../shared/voice"
 import {DEFAULT_WAKE, findWake, wakeIssue} from "../shared/wake"
@@ -77,9 +78,12 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export class Engine {
   private window: {at: number; text: string}[] = []
   private busy = false
+  private loud = new LoudnessWatcher()
+  private lastLevelSent = 0
+  private loudNoteLogged = false
   private fall = new FallGuard({
     say: (t) => this.whisper(t),
-    alert: (r) => this.alertFall(r),
+    alert: (r, trigger) => this.alertFall(r, trigger),
     log: (m) => this.log(m),
   })
   /** Camera warm-up state. A cold camera was the cause of 25 s photo timeouts, so it is warmed as soon as the wearer speaks to us. */
@@ -153,6 +157,43 @@ export class Engine {
     }, {processing: "localOnly"})
     this.log("engine listening (localOnly STT)")
     setInterval(() => void this.checkReminders(), REMIND_EVERY_MS)
+
+    // Loud-noise trigger for the fall check-in: loudness only, nothing is kept or sent. A noise only asks "Are you okay?".
+    try {
+      this.session.mic.onAudioChunk((c) => this.onAudio(c.data, c.format))
+      this.session.ui.on("engine:simNoise", () => void this.fall.start("loud noise"))
+      setTimeout(() => {
+        if (this.loud.chunks === 0) {
+          this.log("no microphone audio chunks received; the loud-noise trigger is unavailable (say \"I've fallen\" instead)")
+          this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: "No audio received. The loud-noise trigger is unavailable."})
+        }
+      }, 12_000)
+    } catch (e) {
+      this.log(`microphone levels unavailable: ${(e as {message?: string}).message}`)
+    }
+  }
+
+  /** One chunk of microphone audio: reduce it to a loudness reading, drop the audio, and maybe start a check-in. */
+  private onAudio(data: string, format?: string) {
+    const lvl = this.loud.measure(data, format)
+    if (!lvl) {
+      if (!this.loudNoteLogged && this.loud.unsupported) {
+        this.loudNoteLogged = true
+        this.log(`loud-noise trigger off: ${this.loud.unsupported}`)
+        this.session.ui.send("p0:level", {rmsDb: 0, peakDb: 0, roomDb: 0, at: Date.now(), status: `Cannot measure: ${this.loud.unsupported}.`})
+      }
+      return
+    }
+    const now = Date.now()
+    if (now - this.lastLevelSent > 100) {
+      this.lastLevelSent = now
+      this.session.ui.send("p0:level", {rmsDb: lvl.rmsDb, peakDb: lvl.peakDb, roomDb: lvl.roomDb, at: now})
+    }
+    // Ally's own whispers are loud in the wearer's ear, so ignore the microphone while speaking and just after.
+    if (lvl.loud && !this.speaking && now >= this.mutedUntil && !this.fall.active) {
+      this.log(`loud noise: peak ${lvl.peakDb.toFixed(0)} dB, room ${lvl.roomDb.toFixed(0)} dB`)
+      void this.fall.start("loud noise")
+    }
   }
 
   private ingest(text: string, forced: boolean) {
@@ -560,9 +601,9 @@ Most recent statement (judge this one): "${latest}"` : earlier
   }
 
   /** Tell the caregiver about a possible fall. True only if the backend took it. */
-  private async alertFall(reason: string): Promise<boolean> {
+  private async alertFall(reason: string, trigger: string): Promise<boolean> {
     try {
-      await this.analyze({skill: "fall", transcriptWindow: reason})
+      await this.analyze({skill: "fall", transcriptWindow: `${reason}|${trigger}`})
       return true
     } catch (e) {
       this.log(`fall alert failed: ${(e as {message?: string}).message}`)

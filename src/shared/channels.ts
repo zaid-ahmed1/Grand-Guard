@@ -14,6 +14,7 @@ export interface Channels {
   "p0:speak": {text: string; voice: VoiceConfig}
   "engine:setVoice": VoiceConfig
   "engine:setWake": {phrase: string}
+  "engine:simNoise": Record<string, never>
 
   // background → WebView
   "engine:backend": {url: string}
@@ -21,6 +22,8 @@ export interface Channels {
   "engine:wake": {phrase: string}
   "pong": {at: number; roundtripMs: number}
   "p0:log": {at: number; msg: string}
+  /** Loudness of the microphone in dB (0 is the loudest). Levels only, never audio. `status` carries a message instead. */
+  "p0:level": {rmsDb: number; peakDb: number; roomDb: number; at: number; status?: string}
   "p0:transcript": {text: string; isFinal: boolean; source?: string; latencyMs: number}
   "p0:photoResult": {url: string; mimeType: string; bytes: number; latencyMs: number; size: string; compress: string}
 }
