@@ -77,6 +77,9 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     implied.forEach((a) => evidence.push({kind: "allergen", detail: `implied by package name (${name}): ${a}`}))
   }
   const ingredientsUnread = !label.ingredientsText && !label.containsText
+  if (!ingredientsUnread && !hits.length && !maybe.length && !implied.length) {
+    parts.push({sev: "info", text: `No ${list(avoid, "or")} in the ingredients.`})
+  }
   const known = label.productName || label.frontText
   if (ingredientsUnread && !hits.length) {
     const kind = KINDS.find((k) => k.re.test(named))
@@ -112,7 +115,8 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
       dateOk = true
       evidence.push({kind: "expiry", detail: `${label.expiry.kind} ${label.expiry.date}, in date`})
     }
-  } else {
+  } else if (!(ingredientsUnread && known && !hits.length)) {
+    // When the ingredients are unreadable the whisper is already long, and the date matters less than the allergens.
     parts.push({sev: "warn", text: "No date could be read."})
   }
 
@@ -123,10 +127,13 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   const rank = {info: 0, warn: 1, danger: 2} as const
   const severity: Severity = parts.reduce<Severity>((m, p) => (rank[p.sev] > rank[m] ? p.sev : m), "info")
   parts.sort((a, b) => rank[b.sev] - rank[a.sev])
+  // The allergen result leads when the ingredients were read and are clean; only the date is missing.
+  const clean = parts.findIndex((x) => x.sev === "info" && x.text.endsWith("in the ingredients."))
+  if (clean > 0) parts.unshift(...parts.splice(clean, 1))
 
   const advice = severity === "danger" ? "Do not eat this." : severity === "warn" ? "Please check the label before eating." : "Please still check the label."
   const body = parts.length
-    ? parts.slice(0, 2).map((p) => p.text).join(" ")
+    ? parts.slice(0, 3).map((p) => p.text).join(" ")
     : `No ${list(avoid, "or")} found on the label, and the date is fine.`
 
   const issues = parts.map((p) => p.text.replace(/\.$/, "")).join("; ")
