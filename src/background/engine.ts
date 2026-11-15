@@ -44,13 +44,13 @@ const SCAM_TRIGGERS: RegExp[] = [
 const RANK = {info: 0, warn: 1, danger: 2} as const
 const SCAM_COMMAND = /is this a scam|check (this|that) (for a scam|scam)|scam check/i
 const FOOD_COMMAND =
-  /check (this|that) (food|leftovers?|meal|snack|package|can|box|label)|check (this|that) for (allergens?|expir)|can i eat (this|that)|(is|are) (this|that|these) (food )?(safe|ok|okay|good) to eat|is this (food )?expired|what'?s in this (food|package|box)/
+  /check (this|that) (food|leftovers?|meal|snack|package|can|box|label)|check (this|that) for (allergens?|expir)|can i (eat|drink) (this|that)|(is|are) (this|that|these) (food |drink )?(safe|ok|okay|good) to (eat|drink)|check (this|that) (drink|beverage|bottle|juice|carton|cup)|is this (food )?expired|what'?s in this (food|package|box)/
 
 const CANCEL = /\b(cancel|never ?mind|stop|forget it)\b/
 const REPEAT = /\b(say that again|repeat that|what did (he|she|they|you) say|come again|say again)\b/
 /** Wake-addressed questions that are about something the wearer is looking at. */
 const LOOK = /\b(this|that|these|those|read|look|says?|label|letter|bill|menu|sign|screen|remote|device|button)\b/
-const FOODISH = /\b(food|expired|allerg\w*|safe to eat|can i eat)\b/
+const FOODISH = /\b(food|drink|beverage|expired|allerg\w*|safe to (eat|drink)|can i (eat|drink))\b/
 const AWAIT_MS = 8_000
 /** Calendar and clock questions work with no wake word: the person who needs them most may have forgotten it. */
 const CALENDAR_COMMAND =

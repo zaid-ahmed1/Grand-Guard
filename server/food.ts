@@ -15,6 +15,8 @@ export interface LabelRead {
   productName: string | null
   /** Verbatim words on the FRONT of the pack that say what the food is (variety, flavour, form), e.g. "Mozzarella string cheese". */
   frontText?: string | null
+  /** True for a beverage (juice, milk, soda, a bottle or carton to drink). */
+  isDrink?: boolean
   ingredientsText: string | null
   containsText: string | null
   mayContainText: string | null
@@ -23,10 +25,10 @@ export interface LabelRead {
 
 const SYSTEM = (today: string) => `You read food packaging for an older adult wearing camera glasses. Today is ${today}.
 Reply with ONLY a JSON object:
-{"isFood":true|false,"productName":string|null,"frontText":string|null,"ingredientsText":string|null,"containsText":string|null,"mayContainText":string|null,"expiry":{"text":string|null,"date":"YYYY-MM-DD"|null,"kind":"use_by"|"best_by"|"expires"|"unknown"}}
+{"isFood":true|false,"isDrink":true|false,"productName":string|null,"frontText":string|null,"ingredientsText":string|null,"containsText":string|null,"mayContainText":string|null,"expiry":{"text":string|null,"date":"YYYY-MM-DD"|null,"kind":"use_by"|"best_by"|"expires"|"unknown"}}
 Rules: copy label text verbatim. frontText is the wording on the front of the pack that says what the food is, such as the variety, flavour or form ("Mozzarella string cheese", "Peanut butter cups"). Copy only words printed on the pack. ingredientsText is the ingredients list, containsText is the "Contains:" line, mayContainText is the "May contain / processed in a facility with" line. Use null for anything not visible or not legible. Never guess or fill in from what such a product usually contains.
 For the date: "use by"/"expires"/"exp" are use_by or expires, "best by"/"best before"/"BB" are best_by. If only month and year are shown, use the last day of that month. If the format is ambiguous (for example 03/04/25), set date to null but keep the text.
-isFood is false if the photo does not show a food or drink item.`
+isFood is false if the photo does not show a food or drink item. isDrink is true when the item is a beverage meant to be drunk (juice, milk, soda, water, a drink bottle or carton), false otherwise.`
 
 /**
  * What a kind of food usually holds, for when the ingredients cannot be read but the name is clear. Hedged advice
@@ -144,7 +146,9 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
   const clean = parts.findIndex((x) => x.sev === "info" && x.text.endsWith("in the ingredients."))
   if (clean > 0) parts.unshift(...parts.splice(clean, 1))
 
-  const advice = severity === "danger" ? "Do not eat this." : severity === "warn" ? "Please check the label before eating." : noDate ? "Make sure to check the expiry date." : "Please still check the label."
+  // Say "drink" for beverages, whether the model flagged one or the name makes it plain.
+  const drink = label.isDrink === true || /\b(juice|soda|cola|lemonade|smoothie|beverage|drink|beer|wine)\b/i.test(named)
+  const advice = severity === "danger" ? `Do not ${drink ? "drink" : "eat"} this.` : severity === "warn" ? `Please check the label before ${drink ? "drinking" : "eating"}.` : noDate ? "Make sure to check the expiry date." : "Please still check the label."
   const body = parts.length
     ? parts.slice(0, 3).map((p) => p.text).join(" ")
     : `No ${list(avoid, "or")} found on the label, and the date is fine.`
@@ -155,7 +159,7 @@ export function judge(label: LabelRead, today: Date, avoid = PROFILE.avoid): Ver
     severity,
     whisper: `${body} ${advice}`,
     // The caregiver gets the gist only: what was asked about and what the wearer was told, not the label details.
-    caregiverSummary: `Asked about ${known || "a food"}. Responded: ${severity === "danger" ? "do not eat this" : severity === "warn" ? "check the label" : "no concerns found"}.`,
+    caregiverSummary: `Asked about ${known || "a food"}. Responded: ${severity === "danger" ? `do not ${drink ? "drink" : "eat"} this` : severity === "warn" ? "check the label" : "no concerns found"}.`,
     evidence,
     needsCaregiver: severity === "danger",
     unreadable,
