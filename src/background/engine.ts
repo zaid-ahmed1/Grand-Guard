@@ -390,7 +390,7 @@ Most recent statement (judge this one): "${latest}"` : earlier
   private async capturePhoto(
     t0: number,
     size: "medium" | "high" | "max" = "medium",
-    text = false,
+    direct = true,
   ): Promise<{url?: string; why?: "busy" | "failed"}> {
     let why: "busy" | "failed" = "failed"
     for (let attempt = 1; attempt <= 4; attempt++) {
@@ -400,9 +400,10 @@ Most recent statement (judge this one): "${latest}"` : earlier
           compress: "medium",
           sound: false,
           timeoutMs: 25_000,
-          ...(text ? {mode: "text" as const} : {}),
+          // Direct Wi-Fi upload only: the slow Bluetooth relay is what left photo jobs stuck.
+          transferMethod: direct ? "direct" : "auto",
         })
-        this.log(`photo ready (${size}${text ? "/text" : ""}) at +${Date.now() - t0} ms`)
+        this.log(`photo ready (${size}/${direct ? "direct" : "auto"}) at +${Date.now() - t0} ms`)
         return {url: r.photoUrl}
       } catch (e) {
         const msg = (e as {message?: string}).message ?? String(e)
@@ -459,12 +460,13 @@ Most recent statement (judge this one): "${latest}"` : earlier
       let v: Verdict | undefined
       for (let pass = 1; pass <= 2; pass++) {
         const announce = this.whisper(pass === 1 ? "Checking this food. Taking a photo now." : "Taking a photo now.")
-        // Labels need pixels: try high (text mode) first, and if the glasses cannot deliver it, fall back to medium.
-        let photo = await this.capturePhoto(t0, pass === 1 ? "high" : "max", true)
+        // Medium over direct Wi-Fi first; the retake (label unreadable) is high. If direct Wi-Fi fails, one more
+        // try over the automatic route at medium.
+        let photo = await this.capturePhoto(t0, pass === 1 ? "medium" : "high")
         if (!photo.url && photo.why === "failed") {
-          this.log("sharp photo failed, falling back to medium")
+          this.log("direct upload failed, retrying over the automatic route")
           await new Promise((res) => setTimeout(res, 3000))
-          photo = await this.capturePhoto(t0, "medium")
+          photo = await this.capturePhoto(t0, "medium", false)
         }
         await announce
         if (!photo.url) {
