@@ -1,4 +1,4 @@
-import {thinkingOff} from "./anthropic"
+import {downloadPhoto, thinkingOff} from "./anthropic"
 import {rememberPhoto} from "./debug"
 import {normalizeTranscript} from "../src/shared/text"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
@@ -50,13 +50,6 @@ function heuristic(req: AnalyzeRequest): Verdict {
   }
 }
 
-async function fetchImage(url: string) {
-  const r = await fetch(url, {signal: AbortSignal.timeout(8000)})
-  if (!r.ok) throw new Error(`photo download ${r.status}`)
-  const type = r.headers.get("content-type")?.split(";")[0] ?? "image/jpeg"
-  return {type, data: Buffer.from(await r.arrayBuffer()).toString("base64")}
-}
-
 export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) {
@@ -67,7 +60,7 @@ export async function analyzeScam(req: AnalyzeRequest): Promise<Verdict> {
   const content: unknown[] = []
   if (req.photoUrl) {
     try {
-      const img = await fetchImage(req.photoUrl)
+      const img = await downloadPhoto(req.photoUrl)
       rememberPhoto("scam", img.type, img.data)
       content.push({type: "image", source: {type: "base64", media_type: img.type, data: img.data}})
     } catch (e) {

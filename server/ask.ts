@@ -3,7 +3,7 @@
  * (small print, paperwork, devices). Private by default: nothing goes to the caregiver
  * feed unless the item looks like a scam.
  */
-import {thinkingOff} from "./anthropic"
+import {downloadPhoto, thinkingOff} from "./anthropic"
 import {rememberNote, rememberPhoto} from "./debug"
 import type {AnalyzeRequest, Verdict} from "../src/shared/types"
 
@@ -33,10 +33,7 @@ export async function analyzeAsk(req: AnalyzeRequest): Promise<Verdict> {
   try {
     const content: unknown[] = []
     if (req.photoUrl) {
-      const img = await fetch(req.photoUrl, {signal: AbortSignal.timeout(8000)})
-      if (!img.ok) throw new Error(`photo download ${img.status}`)
-      const type = img.headers.get("content-type")?.split(";")[0] ?? "image/jpeg"
-      const data = Buffer.from(await img.arrayBuffer()).toString("base64")
+      const {type, data} = await downloadPhoto(req.photoUrl)
       rememberPhoto("ask", type, data)
       content.push({type: "image", source: {type: "base64", media_type: type, data}})
     }

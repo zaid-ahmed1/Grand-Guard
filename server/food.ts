@@ -3,7 +3,7 @@
  * Plain code then compares it to the wearer's profile and today's date, so allergen and
  * date decisions are deterministic and testable.
  */
-import {thinkingOff} from "./anthropic"
+import {downloadPhoto, thinkingOff} from "./anthropic"
 import {rememberNote, rememberPhoto} from "./debug"
 import {mentions, PROFILE} from "./profile"
 import type {AnalyzeRequest, Severity, Verdict} from "../src/shared/types"
@@ -175,10 +175,7 @@ export async function analyzeFood(req: AnalyzeRequest): Promise<Verdict> {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key || !req.photoUrl) return FAIL
   try {
-    const img = await fetch(req.photoUrl, {signal: AbortSignal.timeout(8000)})
-    if (!img.ok) throw new Error(`photo download ${img.status}`)
-    const type = img.headers.get("content-type")?.split(";")[0] ?? "image/jpeg"
-    const data = Buffer.from(await img.arrayBuffer()).toString("base64")
+    const {type, data} = await downloadPhoto(req.photoUrl)
     rememberPhoto("food", type, data)
     const today = new Date()
     const r = await fetch("https://api.anthropic.com/v1/messages", {
